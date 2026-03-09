@@ -1,3 +1,5 @@
+import json
+
 class Puzzle():
 
     def __init__(self, size):
@@ -60,10 +62,18 @@ class Puzzle():
     def json(self):
         return {"grid": self.grid, "words": self.words}
 
-pzl = Puzzle(20)
-pzl.insert("картошка", 3, 5, True)
-pzl.insert("морковка", 2, 9, False)
-pzl.log()
+
+if __name__ == "__main__":
+    pzl = Puzzle(20)
+    pzl.insert("картошка", 3, 5, True)
+    pzl.insert("морковка", 2, 9, False)
+    pzl.insert("огурец", 6, 9, True)
+    pzl.insert("говнецо", 11, 10, True)
+    pzl.insert("мясо", 15, 15, False)
+    pzl.log()
+    print()
+    with open('puzzlegen/puzzle.json', 'w') as f:
+        json.dump(pzl.json(), f)
 
 
 
