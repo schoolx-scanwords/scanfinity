@@ -1,4 +1,5 @@
 import json
+import random
 
 class Puzzle():
 
@@ -45,9 +46,10 @@ class Puzzle():
                 self.insert_charline(x + 1, y - 1, len(word), direction, "%")
             
             self.words.append({ # storing word-data
+                "id": len(self.words),
                 "word": word,
                 "riddle": riddle,
-                "coords": (x, y, len(word))
+                "coords": [x, y, len(word)]
                 })
 
         else:
@@ -60,7 +62,12 @@ class Puzzle():
             print(row)
 
     def json(self):
-        return {"grid": self.grid, "words": self.words}
+
+        blank_grid = []
+        for line in self.grid:
+            blank_grid.append(["L" if char.isalpha() else char for char in line]) # blank grid will be parsed by client to avoid cheating
+
+        return {"id": random.randint(0, 10000), "blank": blank_grid, "grid": self.grid, "words": self.words}
 
 
 if __name__ == "__main__":
