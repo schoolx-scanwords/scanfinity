@@ -1,559 +1,642 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import {useState,  useEffect, useRef, useCallback, use} from 'react';
 
-// Types
-type GridCell = string;
-type GridRow = GridCell[];
-type GridData = GridRow[];
+type KeyPressHandler = (event: KeyboardEvent) => void;
 
-interface SelectedWord {
-  row: number;
-  col: number;
-  direction: 'across' | 'down';
-}
-
-interface ActiveCell {
-  row: number;
-  col: number;
-}
-
-interface PanPosition {
+//getting puzzle_data from .json
+interface Coordinates {
   x: number;
   y: number;
+  len: number;
 }
 
-export default function Crossword() {
-  const [grid, setGrid] = useState<GridData>([]);
-  const [initialGrid, setInitialGrid] = useState<GridData>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedWord, setSelectedWord] = useState<SelectedWord | null>(null);
-  const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
-  const [zoom, setZoom] = useState<number>(1);
-  const [pan, setPan] = useState<PanPosition>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<PanPosition>({ x: 0, y: 0 });
-  
-  const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-   const wheelTimerRef = useRef<number | null>(null);
+interface WordData {
+  id: number;
+  riddle: string;
+  coords: Coordinates[];
+  direction: string;
+}
 
-  // Fetch grid data from FastAPI
+interface ApiWord {
+  id: number;
+  riddle: string;
+  coords: number[];
+  direction: string;
+}
+
+interface Cell {
+  item: string;
+  symbol?: string;
+}
+
+interface Line {
+  cells: Cell[];
+}
+
+interface Grid {
+  lines: Line[];
+}
+
+interface wordCoords {
+  id: number;
+  coords: number[][];
+}
+
+interface Puzzle {
+  grid: Grid;
+  words: WordData[];
+}
+
+interface Word {
+  id: number;
+  word: string;
+}
+
+interface WordGuess {
+  pzl_id: number;
+  word: Word;
+}
+
+const findWordsAtCoord = (words: wordCoords[], x: number, y: number) => 
+  words.filter(word => word.coords.some(([cx, cy]) => cx === x && cy === y));
+
+const findStart = (words: wordCoords[], id: number): number[] => {
+  const word = words[id];
+  
+  return word.coords.reduce((closest, current) => {
+    // Calculate distance from (0,0) using Euclidean distance
+    const closestDistance = Math.sqrt(closest[0] ** 2 + closest[1] ** 2);
+    const currentDistance = Math.sqrt(current[0] ** 2 + current[1] ** 2);
+    
+    return currentDistance < closestDistance ? current : closest;
+  });
+};
+
+const findWordById = (id: number | null, words: WordData[] | null) => {
+  if (id === null || !words) return undefined;
+  return words.find(word => word.id === id);
+};
+
+const collectWord = (grid: Grid, words: wordCoords[], id: number): { id: number; word: string } => {
+  const word = words.find(word => word.id === id);
+  if (!word) return { id, word: '' };
+  
+  const wordString = word.coords
+    .map(([col, row]) => grid.lines[row]?.cells[col]?.symbol || '')
+    .join('');
+    
+  return { id, word: wordString };
+};
+
+const collectPuzzle = (grid: Grid, words: wordCoords[], puzzle_id: number) => {
+  let guesses = {
+    pzl_id: puzzle_id, 
+    words: [] as Array<{id: number, word: string}>
+  };
+  
+  words.map((word) => {
+    const wordGuess = collectWord(grid, words, word.id);
+    guesses.words.push(wordGuess);
+  });
+  
+  return guesses;
+};
+
+
+export default function Home() {
+  const [puzzleId, setPuzzleId] = useState<number | null>(null); 
+  const [grid, setGrid] = useState<Grid | undefined>(undefined);
+  const [words, setWords] = useState<WordData[] | null>(null);
+  const [wordCoords, setWordCoords] = useState<wordCoords[] | undefined>(undefined);
+  const [hoveredWordIds, setHoveredWordIds] = useState<number[] | null>(null);
+  const [selectedWord, setSelectedWord] = useState<number | null>(null);
+  const [isSelected, setIsSelected] = useState<boolean>(false);
+  const [selectedCell, setSelectedCell] = useState<[number, number] | null>(null);
+  const [correct, setCorrect] = useState<number[] | null>(null)
+
+  const isCellCorrect = (x: number, y: number, ignoreSelected: boolean = true) => {
+    if (!correct || !wordCoords) return false;
+    const word_ids = findWordsAtCoord(wordCoords, x, y).map(word => word.id);
+    
+    if (ignoreSelected && selectedWord !== null && word_ids.includes(selectedWord)) {
+      return false;
+    }
+    
+    return word_ids.some(id => correct.includes(id));
+  };
+
+  // Fetch data from API
   useEffect(() => {
-    fetch('/api/grid')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch grid: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data: GridData) => {
-        console.log('Grid loaded:', data); // Debug log
-        setInitialGrid(data);
+    const fetchPuzzle = async () => {
+      try {
+        const response = await fetch('/api/grid');
+        const data = await response.json();
         
-        // Create blank grid from the fetched data
-        const blankGrid = data.map((row: GridRow) => 
-          row.map((cell: GridCell) => {
-            // Keep structure markers, blank out letter positions
-            if (cell !== '#' && cell !== '0' && cell !== '%') {
-              return ''; // Blank for letter positions
-            }
-            return cell; // Keep structure markers
-          })
-        );
-        setGrid(blankGrid);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Error loading grid:', err);
-        setError(err.message);
-        setLoading(false);
-      });
+        const parsePuzzle: Puzzle = {
+          grid: {
+            lines: data.blank.map((row: string[]) => ({
+              cells: row.map((cell: string) => ({
+                item: cell,
+              })),
+            })),
+          },
+          words: data.words.map((word: ApiWord) => ({  // Add type here
+            id: word.id,
+            riddle: word.riddle,
+            direction: word.direction,
+            coords: word.coords
+          })),
+        };
+
+        setGrid(parsePuzzle.grid);
+        setWords(parsePuzzle.words);
+        setPuzzleId(data.id);
+
+        const word_coords = data.words.map((word: ApiWord) => {  // Add type here
+          const [x, y, len] = word.coords;
+          const cells: number[][] = [];
+          
+          if (word.direction === 'right') {
+            for (let i = x + 1; i < x + len + 1; i++) cells.push([i, y]);
+          } else {
+            for (let i = y + 1; i < y + len + 1; i++) cells.push([x, i]);
+          }
+          
+          return { id: word.id, coords: cells };
+        });
+
+        setWordCoords(word_coords);
+      } catch (error) {
+        console.error('Error fetching puzzle:', error);
+      }
+    };
+
+    fetchPuzzle();
   }, []);
 
-  // Focus the container when component mounts
-  useEffect(() => {
-    if (!loading && containerRef.current) {
-      containerRef.current.focus();
-    }
-  }, [loading]);
 
-  // Helper functions that depend on initialGrid
-  const isLetter = (cell: string): boolean => {
-    return cell !== '0' && cell !== '#' && cell !== '%';
-  };
+useEffect(() => {
+  const handler = (event: KeyboardEvent) => {
+    if (!wordCoords || !selectedCell || !grid) return;
 
-  const isEditable = (row: number, col: number): boolean => {
-    if (!initialGrid.length || !initialGrid[row]) return false;
-    const originalCell = initialGrid[row]?.[col];
-    return originalCell !== '0' && originalCell !== '#' && originalCell !== '%';
-  };
-
-  // Find the start of the word at a given position
-  const findWordStart = (row: number, col: number, direction: 'across' | 'down'): [number, number] => {
-    if (!initialGrid.length) return [row, col];
+    const allCoords = wordCoords.map(word => word.coords).flat();
     
-    let r = row;
-    let c = col;
+    const [row, col] = selectedCell;
     
-    if (direction === 'across') {
-      // Move left to the start of the word
-      while (c > 0 && isLetter(initialGrid[r]?.[c - 1] || '0')) {
-        c--;
-      }
-    } else {
-      // Move up to the start of the word
-      while (r > 0 && isLetter(initialGrid[r - 1]?.[c] || '0')) {
-        r--;
-      }
-    }
+    const isCellCorrect = (x: number, y: number) => {
+      if (!correct || !wordCoords) return false;
+      const word_ids = findWordsAtCoord(wordCoords, x, y).map(word => word.id);
+      return word_ids.some(id => correct.includes(id));
+    };
     
-    return [r, c];
-  };
+    const hasCoord = (x: number, y: number) => {
+      return allCoords.some(([cx, cy]) => cx === x && cy === y);
+    };
 
-  // Get all cells in a word
-  const getWordCells = (row: number, col: number, direction: 'across' | 'down'): [number, number][] => {
-    if (!initialGrid.length) return [];
-    
-    const [startRow, startCol] = findWordStart(row, col, direction);
-    const cells: [number, number][] = [];
-    
-    if (direction === 'across') {
-      let c = startCol;
-      while (c < initialGrid[0].length && isLetter(initialGrid[startRow]?.[c] || '0')) {
-        cells.push([startRow, c]);
-        c++;
-      }
-    } else {
-      let r = startRow;
-      while (r < initialGrid.length && isLetter(initialGrid[r]?.[startCol] || '0')) {
-        cells.push([r, startCol]);
-        r++;
-      }
-    }
-    
-    return cells;
-  };
-
-  // Check if a cell is part of the selected word
-  const isPartOfSelectedWord = (row: number, col: number): boolean => {
-    if (!selectedWord) return false;
-    
-    const wordCells = getWordCells(selectedWord.row, selectedWord.col, selectedWord.direction);
-    return wordCells.some(([r, c]) => r === row && c === col);
-  };
-
-  // Check if a word exists in a given direction
-  const hasWordInDirection = (row: number, col: number, direction: 'across' | 'down'): boolean => {
-    const cells = getWordCells(row, col, direction);
-    return cells.length >= 2;
-  };
-
-  const handleCellClick = (rowIndex: number, colIndex: number): void => {
-    if (!isEditable(rowIndex, colIndex) || isDragging) return;
-
-    setActiveCell({ row: rowIndex, col: colIndex });
-
-    if (!selectedWord || 
-        selectedWord.row !== rowIndex || 
-        selectedWord.col !== colIndex) {
+    const findNextAvailableCell = (startRow: number, startCol: number, direction: string): [number, number] | null => {
+      let currentRow = startRow;
+      let currentCol = startCol;
       
-      if (hasWordInDirection(rowIndex, colIndex, 'across')) {
-        setSelectedWord({ row: rowIndex, col: colIndex, direction: 'across' });
-      } else if (hasWordInDirection(rowIndex, colIndex, 'down')) {
-        setSelectedWord({ row: rowIndex, col: colIndex, direction: 'down' });
-      }
-    } else {
-      const newDirection = selectedWord.direction === 'across' ? 'down' : 'across';
-      
-      if (hasWordInDirection(rowIndex, colIndex, newDirection)) {
-        setSelectedWord({
-          row: rowIndex,
-          col: colIndex,
-          direction: newDirection
-        });
-      }
-    }
-  };
-
-  const moveToNextCell = (currentRow: number, currentCol: number): void => {
-    if (!selectedWord) return;
-
-    const wordCells = getWordCells(selectedWord.row, selectedWord.col, selectedWord.direction);
-    const currentIndex = wordCells.findIndex(([r, c]) => r === currentRow && c === currentCol);
-    
-    if (currentIndex < wordCells.length - 1) {
-      const [nextRow, nextCol] = wordCells[currentIndex + 1];
-      setActiveCell({ row: nextRow, col: nextCol });
-    }
-  };
-
-  const moveToPreviousCell = (currentRow: number, currentCol: number): void => {
-    if (!selectedWord) return;
-
-    const wordCells = getWordCells(selectedWord.row, selectedWord.col, selectedWord.direction);
-    const currentIndex = wordCells.findIndex(([r, c]) => r === currentRow && c === currentCol);
-    
-    if (currentIndex > 0) {
-      const [prevRow, prevCol] = wordCells[currentIndex - 1];
-      setActiveCell({ row: prevRow, col: prevCol });
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (!activeCell) return;
-
-    const { row, col } = activeCell;
-    const key = e.key;
-
-    if (key === 'Enter') {
-      e.preventDefault();
-      
-      if (selectedWord) {
-        const currentWord = getWordCells(selectedWord.row, selectedWord.col, selectedWord.direction)
-          .map(([r, c]) => grid[r]?.[c] || '')
-          .join('');
+      while (true) {
+        if (direction === 'up') currentRow--;
+        else if (direction === 'down') currentRow++;
+        else if (direction === 'left') currentCol--;
+        else if (direction === 'right') currentCol++;
         
-        fetch('/api/check-word', {
+        if (currentRow < 0 || currentRow >= grid.lines.length || 
+            currentCol < 0 || currentCol >= grid.lines[0].cells.length) {
+          return null;
+        }
+        
+        if (hasCoord(currentCol, currentRow)) {
+          return [currentRow, currentCol];
+        }
+      }
+    };
+
+    let newRow = row;
+    let newCol = col;
+
+    if (event.key.startsWith('Arrow')) {
+      event.preventDefault();
+      
+      let moved = false;
+      
+      switch (event.key) {
+        case 'ArrowUp':
+          if (row > 0 && hasCoord(col, row - 1)) {
+            newRow = row - 1;
+            moved = true;
+          } else {
+            const nextCell = findNextAvailableCell(row, col, 'up');
+            if (nextCell) {
+              newRow = nextCell[0];
+              newCol = nextCell[1];
+              moved = true;
+            }
+          }
+          break;
+        case 'ArrowDown':
+          if (row < grid.lines.length - 1 && hasCoord(col, row + 1)) {
+            newRow = row + 1;
+            moved = true;
+          } else {
+            const nextCell = findNextAvailableCell(row, col, 'down');
+            if (nextCell) {
+              newRow = nextCell[0];
+              newCol = nextCell[1];
+              moved = true;
+            }
+          }
+          break;
+        case 'ArrowLeft':
+          if (col > 0 && hasCoord(col - 1, row)) {
+            newCol = col - 1;
+            moved = true;
+          } else {
+            const nextCell = findNextAvailableCell(row, col, 'left');
+            if (nextCell) {
+              newRow = nextCell[0];
+              newCol = nextCell[1];
+              moved = true;
+            }
+          }
+          break;
+        case 'ArrowRight':
+          if (col < grid.lines[0].cells.length - 1 && hasCoord(col + 1, row)) {
+            newCol = col + 1;
+            moved = true;
+          } else {
+            const nextCell = findNextAvailableCell(row, col, 'right');
+            if (nextCell) {
+              newRow = nextCell[0];
+              newCol = nextCell[1];
+              moved = true;
+            }
+          }
+          break;
+      }
+      
+      // If we couldn't move anywhere, keep current position
+      if (!moved) {
+        newRow = row;
+        newCol = col;
+      }
+    }
+
+    if (event.key === 'Enter') {
+      if (selectedWord !== null) {
+        const word = collectWord(grid, wordCoords, selectedWord);
+        const wordGuess: WordGuess = {
+          pzl_id: puzzleId!, 
+          word: word
+        }
+        fetch('http://localhost:8000/api/check_word', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            word: currentWord,
-            row: activeCell.row,
-            col: activeCell.col,
-            direction: selectedWord.direction,
-          }),
+          body: JSON.stringify(wordGuess)
         })
         .then(response => response.json())
         .then(data => {
-          console.log('API response:', data);
+          if (data.guessed !== null) {
+            if (!correct) {
+              setCorrect([data.guessed])
+            }
+            else {
+              setCorrect([...correct, data.guessed])
+            }
+          }
         })
         .catch(error => {
-          console.error('API error:', error);
+          console.error('Error checking puzzle:', error);
         });
       }
-      return;
     }
 
-    if (key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      e.preventDefault();
-      
-      setGrid(prevGrid => {
-        const newGrid = [...prevGrid];
-        if (newGrid[row]) {
-          newGrid[row] = [...prevGrid[row]];
-          newGrid[row][col] = key;
-        }
-        return newGrid;
-      });
-
-      moveToNextCell(row, col);
-      return;
-    }
-
-    if (key === 'Backspace') {
-      e.preventDefault();
-      
-      setGrid(prevGrid => {
-        const newGrid = [...prevGrid];
-        if (newGrid[row]) {
-          newGrid[row] = [...prevGrid[row]];
-          newGrid[row][col] = '';
-        }
-        return newGrid;
-      });
-
-      moveToPreviousCell(row, col);
-      return;
-    }
-
-    if (key === 'Delete') {
-      e.preventDefault();
-      
-      setGrid(prevGrid => {
-        const newGrid = [...prevGrid];
-        if (newGrid[row]) {
-          newGrid[row] = [...prevGrid[row]];
-          newGrid[row][col] = '';
-        }
-        return newGrid;
-      });
-      return;
-    }
-    
-    if (key === ' ') {
-      e.preventDefault();
-      
-      setGrid(prevGrid => {
-        const newGrid = [...prevGrid];
-        if (newGrid[row]) {
-          newGrid[row] = [...prevGrid[row]];
-          newGrid[row][col] = ' ';
-        }
-        return newGrid;
-      });
-
-      moveToNextCell(row, col);
-      return;
-    }
-
-    if (key.startsWith('Arrow')) {
-      e.preventDefault();
-      
-      let newRow = row;
-      let newCol = col;
-      
-      switch (key) {
-        case 'ArrowRight':
-          newCol = col + 1;
-          while (newCol < (grid[0]?.length || 0) && !isEditable(row, newCol)) {
-            newCol++;
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      if (selectedWord !== null && puzzleId !== null) {
+        const guess = collectPuzzle(grid, wordCoords, puzzleId);
+        fetch('http://localhost:8000/api/check_puzzle', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(guess),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.guessed !== null) {
+            setCorrect(data.guessed)
           }
-          break;
-        case 'ArrowLeft':
-          newCol = col - 1;
-          while (newCol >= 0 && !isEditable(row, newCol)) {
-            newCol--;
+        })
+        .catch(error => {
+          console.error('Error checking puzzle:', error);
+        });
+      }
+    }
+
+    if (event.key === 'Backspace') {
+      const currentCellIsCorrect = isCellCorrect(col, row);
+      if (currentCellIsCorrect) return;
+      
+      const newGrid = {...grid};
+      newGrid.lines[row].cells[col] = {
+        ...newGrid.lines[row].cells[col], 
+        symbol: ''
+      };
+      setGrid(newGrid);
+      
+      const currentWord = findWordById(selectedWord, words);
+      if (currentWord) {
+        if (currentWord.direction === 'right') {
+          // Find previous cell in the word that's not a correct cell
+          let prevCol = col - 1;
+          while (prevCol >= 0 && hasCoord(prevCol, row) && isCellCorrect(prevCol, row)) {
+            prevCol--;
           }
-          break;
-        case 'ArrowDown':
-          newRow = row + 1;
-          while (newRow < grid.length && !isEditable(newRow, col)) {
-            newRow++;
+          if (prevCol >= 0 && hasCoord(prevCol, row)) {
+            newRow = row;
+            newCol = prevCol;
           }
-          break;
-        case 'ArrowUp':
-          newRow = row - 1;
-          while (newRow >= 0 && !isEditable(newRow, col)) {
-            newRow--;
+        } else {
+          // Find previous cell in the word that's not a correct cell
+          let prevRow = row - 1;
+          while (prevRow >= 0 && hasCoord(col, prevRow) && isCellCorrect(col, prevRow)) {
+            prevRow--;
           }
-          break;
+          if (prevRow >= 0 && hasCoord(col, prevRow)) {
+            newRow = prevRow;
+            newCol = col;
+          }
+        }
       }
+    }
+
+    if (event.key.length === 1 && !event.key.startsWith('Arrow')) {
+      const currentCellIsCorrect = isCellCorrect(col, row);
+      if (currentCellIsCorrect) return;
       
-      if (newRow >= 0 && newRow < grid.length && 
-          newCol >= 0 && newCol < (grid[0]?.length || 0) && 
-          isEditable(newRow, newCol)) {
-        setActiveCell({ row: newRow, col: newCol });
-        handleCellClick(newRow, newCol);
-      }
-    }
-  };
+      const newGrid = {...grid};
+      newGrid.lines[row].cells[col] = {
+        ...newGrid.lines[row].cells[col], 
+        symbol: event.key.toUpperCase()
+      };
+      setGrid(newGrid);
 
-  // Handle mouse wheel for zooming
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    
-    if (!containerRef.current || !contentRef.current) return;
-
-    if (wheelTimerRef.current) {
-      clearTimeout(wheelTimerRef.current);
-    }
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-
-    const mouseX = e.clientX - containerRect.left;
-    const mouseY = e.clientY - containerRect.top;
-
-    const contentMouseX = (mouseX - pan.x - containerRect.width / 2) / zoom;
-    const contentMouseY = (mouseY - pan.y - containerRect.height / 2) / zoom;
-
-    const zoomFactor = 0.05;
-    const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
-    const newZoom = Math.min(Math.max(0.25, zoom + delta), 4);
-
-    const newPanX = mouseX - containerRect.width / 2 - contentMouseX * newZoom;
-    const newPanY = mouseY - containerRect.height / 2 - contentMouseY * newZoom;
-
-    setZoom(newZoom);
-    setPan({ x: newPanX, y: newPanY });
-
-    wheelTimerRef.current = window.setTimeout(() => {
-      if (contentRef.current) {
-        contentRef.current.style.transition = 'transform 0.1s ease';
-      }
-    }, 50);
-
-    // When clearing
-    if (wheelTimerRef.current) {
-      clearTimeout(wheelTimerRef.current);
-    }
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (e.button === 1) {
-      e.preventDefault();
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - pan.x,
-        y: e.clientY - pan.y
-      });
+      const currentWord = findWordById(selectedWord, words);
       
-      if (contentRef.current) {
-        contentRef.current.style.transition = 'none';
-      }
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (isDragging) {
-      e.preventDefault();
-      setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
-      });
-    }
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (e.button === 1) {
-      setIsDragging(false);
-      
-      if (contentRef.current) {
-        contentRef.current.style.transition = 'transform 0.1s ease';
-      }
-    }
-  };
-
-  const handleMouseLeave = (): void => {
-    if (isDragging) {
-      setIsDragging(false);
-      
-      if (contentRef.current) {
-        contentRef.current.style.transition = 'transform 0.1s ease';
-      }
-    }
-  };
-
-  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (e.button === 1) {
-      e.preventDefault();
-    }
-  };
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-xl">Loading crossword puzzle...</div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error || !grid.length) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-xl text-red-600">
-          {error || 'Failed to load crossword puzzle'}
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate cell size based on zoom
-  const cellSize = 32 * zoom;
-
-  return (
-    <div 
-      ref={containerRef}
-      className="bg-gray-100 overflow-hidden"
-      onKeyDown={handleKeyDown}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-      onContextMenu={handleContextMenu}
-      tabIndex={0}
-      style={{ 
-        outline: 'none',
-        cursor: isDragging ? 'grabbing' : 'default',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        ref={contentRef}
-        style={{
-          position: 'relative',
-          transform: `translate(${pan.x}px, ${pan.y}px)`,
-        }}
-      >
-        <div 
-          style={{
-            display: 'inline-grid',
-            gridTemplateColumns: `repeat(${grid[0]?.length || 0}, ${cellSize}px)`,
-            gap: '0px',
-            backgroundColor: 'transparent',
-          }}
-        >
-          {grid.map((row, rowIndex) => 
-            row.map((cell, colIndex) => {
-              const isEditableCell = isEditable(rowIndex, colIndex);
-              const isSelected = isPartOfSelectedWord(rowIndex, colIndex);
-              const isActive = activeCell?.row === rowIndex && activeCell?.col === colIndex;
-              
-              // Determine background color
-              let bgColor = 'transparent';
-              if (isEditableCell) {
-                if (isSelected) {
-                  bgColor = '#fde047';
-                } else {
-                  bgColor = '#dbeafe';
-                }
+      if (currentWord) {
+        if (currentWord.direction === 'right') {
+          let nextCol = col + 1;
+          while (hasCoord(nextCol, row) && isCellCorrect(nextCol, row)) {
+            nextCol++;
+          }
+          if (hasCoord(nextCol, row)) {
+            newCol = nextCol;
+          }
+        } else { 
+          let nextRow = row + 1;
+          while (hasCoord(col, nextRow) && isCellCorrect(col, nextRow)) {
+            nextRow++;
+          }
+          if (hasCoord(col, nextRow)) {
+            newRow = nextRow;
+          }
+        }
+      } else {
+        const wordsAtCurrent = findWordsAtCoord(wordCoords, col, row);
+        if (wordsAtCurrent.length > 0) {
+          const firstWord = findWordById(wordsAtCurrent[0].id, words);
+          if (firstWord) {
+            setSelectedWord(firstWord.id);
+            if (firstWord.direction === 'right') {
+              let nextCol = col + 1;
+              while (hasCoord(nextCol, row) && isCellCorrect(nextCol, row)) {
+                nextCol++;
               }
+              if (hasCoord(nextCol, row)) {
+                newCol = nextCol;
+              }
+            } else {
+              let nextRow = row + 1;
+              while (hasCoord(col, nextRow) && isCellCorrect(col, nextRow)) {
+                nextRow++;
+              }
+              if (hasCoord(col, nextRow)) {
+                newRow = nextRow;
+              }
+            }
+          }
+        }
+      }
+    }
 
-              return (
-                <div
-                  key={`${rowIndex}-${colIndex}`}
-                  onClick={() => handleCellClick(rowIndex, colIndex)}
-                  style={{
-                    width: `${cellSize}px`,
-                    height: `${cellSize}px`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: `${cellSize * 0.5}px`,
-                    fontWeight: '500',
-                    fontFamily: 'Arial, sans-serif',
-                    backgroundColor: bgColor,
-                    color: 'black',
-                    cursor: isEditableCell && !isDragging ? 'pointer' : 'default',
-                    transition: 'background-color 0.2s ease',
-                    position: 'relative',
-                    border: isActive ? `2px solid #2563eb` : 'none',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {/* Only show content for editable cells */}
-                  {isEditableCell && cell}
-                  
-                  {/* Small dot indicator for empty editable cells */}
-                  {isEditableCell && !cell && !isActive && (
-                    <span style={{
-                      position: 'absolute',
-                      width: `${cellSize * 0.125}px`,
-                      height: `${cellSize * 0.125}px`,
-                      borderRadius: '50%',
-                      backgroundColor: '#94a3b8',
-                      opacity: 0.3,
-                    }} />
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+    // Validate bounds before updating
+    if (newRow >= 0 && newRow < grid.lines.length && 
+        newCol >= 0 && newCol < grid.lines[0].cells.length &&
+        hasCoord(newCol, newRow)) {
+      
+      const wordsAtTarget = findWordsAtCoord(wordCoords, newCol, newRow);
+      if (wordsAtTarget.length > 0) {
+        setSelectedCell([newRow, newCol]);
+        
+        if (wordsAtTarget.length === 1) {
+          setSelectedWord(wordsAtTarget[0].id);
+        } else if (wordsAtTarget.length > 1) {
+          const currentWord = findWordById(selectedWord, words);
+          if (currentWord) {
+            const sameDirectionWord = wordsAtTarget.find(w => {
+              const wordData = findWordById(w.id, words);
+              return wordData?.direction === currentWord.direction;
+            });
+            if (sameDirectionWord) {
+              setSelectedWord(sameDirectionWord.id);
+            } else {
+              setSelectedWord(wordsAtTarget[0].id);
+            }
+          } else {
+            setSelectedWord(wordsAtTarget[0].id);
+          }
+        }
+      }
+    }
+  };
+
+  window.addEventListener('keydown', handler);
+  return () => window.removeEventListener('keydown', handler);
+}, [wordCoords, selectedCell, grid, selectedWord, words, puzzleId, correct]);
+
+const handleMouseClick = (event: React.MouseEvent<HTMLDivElement>, cellId: number[]) => {
+    const word_ids_len = hoveredWordIds?.length;
+    
+    setSelectedWord(prevSelected => {
+      let newSelectedWord = prevSelected;
+      
+      if (word_ids_len == 1) {
+        setIsSelected(true);
+        newSelectedWord = hoveredWordIds?.[0] ?? null;
+      } 
+      else if (word_ids_len == 2) {
+        if (isSelected) {
+          if (prevSelected === hoveredWordIds?.[0]) {
+            newSelectedWord = hoveredWordIds?.[1] ?? null;
+          } else {
+            newSelectedWord = hoveredWordIds?.[0] ?? null;
+          }
+        } else {
+          setIsSelected(true);
+          if (prevSelected === hoveredWordIds?.[0]) {
+            newSelectedWord = hoveredWordIds?.[1] ?? null;
+          } else {
+            newSelectedWord = hoveredWordIds?.[0] ?? null;
+          }
+        }
+      }
+      
+      // Find the first empty cell in the word
+      if (newSelectedWord !== null && wordCoords && grid) {
+        const word = wordCoords.find(w => w.id === newSelectedWord);
+        if (word) {
+          // Sort coordinates in order (by row for down words, by col for right words)
+          const wordInfo = findWordById(newSelectedWord, words);
+          const sortedCoords = [...word.coords].sort((a, b) => {
+            if (wordInfo?.direction === 'right') {
+              return a[0] - b[0]; // sort by column for right words
+            } else {
+              return a[1] - b[1]; // sort by row for down words
+            }
+          });
+          
+          // Find first empty cell
+          const firstEmpty = sortedCoords.find(([col, row]) => 
+            !grid.lines[row]?.cells[col]?.symbol
+          );
+          
+          if (firstEmpty) {
+            setSelectedCell([firstEmpty[1], firstEmpty[0]]);
+          } else {
+            // If no empty cells, go to the start
+            const start = findStart(wordCoords, newSelectedWord);
+            setSelectedCell([start[1], start[0]]);
+          }
+        }
+      } else {
+        const start = findStart(wordCoords ?? [], newSelectedWord ?? -1);
+        setSelectedCell([start[1], start[0]]);
+      }
+      
+      return newSelectedWord;
+    });
+};
+
+return (
+  <div className='min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] p-4 sm:p-6 md:p-8 flex items-start justify-center'>
+    <div className="w-full max-w-4xl mx-auto">
+      {/* Pretty header with gradient text */}
+      <div className="mb-8 text-center">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#f6d5f7] to-[#fbe9d7] drop-shadow-lg">
+          Ёбаный Кроссворд
+        </h1>
+        <div className="w-24 h-1 bg-gradient-to-r from-[#f6d5f7] to-[#fbe9d7] mx-auto mt-2 rounded-full"></div>
       </div>
+      
+      {/* Riddles section at the top */}
+      {selectedWord !== null && words && (
+        <div className="mb-6 p-4 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/20">
+          <p className="text-sm font-semibold text-[#667eea] uppercase tracking-wider mb-1">Загадка:</p>
+          <p className="text-lg text-gray-800 font-medium">
+            {findWordById(selectedWord, words)?.riddle || 'Нет загадки'}
+          </p>
+        </div>
+      )}
+      
+      {/* Crossword container */}
+      <div className="flex flex-col items-center gap-6">
+        <div className="flex justify-center">
+          {/* Just the words, no grid */}
+          <div className="inline-block bg-white/10 backdrop-blur-sm p-4 rounded-2xl shadow-2xl">
+            {grid?.lines.map((line, lineIndex) => (
+              <div key={lineIndex} className="flex">
+                {line.cells.map((cell, cellIndex) => {
+                  if (cell.item === 'L') {
+                    const word_ids = findWordsAtCoord(wordCoords ?? [], cellIndex, lineIndex).map(word => word.id);
+                    const isSelectedCell = selectedCell !== null && 
+                                         selectedCell[0] === lineIndex && 
+                                         selectedCell[1] === cellIndex;
+                    const isSelectedWord = isSelected == true && word_ids.includes(selectedWord ?? -1);
+                    const isHoveredWord = hoveredWordIds !== null && word_ids.includes(hoveredWordIds[0]);
+                    const isCorrectWord = correct !== null && word_ids.some(id => correct.includes(id));
+                    
+                    // Visible word cells with darker backgrounds
+                    let bgColor = 'bg-gray-300'; // darker base
+                    if (isCorrectWord) bgColor = 'bg-green-300'; // green for correct words
+                    else if (isSelectedCell) bgColor = 'bg-red-300'; // bright red
+                    else if (isSelectedWord) bgColor = 'bg-blue-300'; // bright blue
+                    else if (isHoveredWord) bgColor = 'bg-purple-300'; // bright purple
+                    
+                    return (
+                      <div
+                        key={`${lineIndex}-${cellIndex}`}
+                        onMouseEnter={() => setHoveredWordIds(word_ids)}
+                        onMouseLeave={() => setHoveredWordIds(null)}
+                        onClick={(event) => handleMouseClick(event, [lineIndex, cellIndex])}
+                        data-word_id={word_ids.join('-')}
+                        className={`
+                          w-10 h-10 xs:w-12 xs:h-12 sm:w-14 sm:h-14 md:w-16 md:h-16
+                          flex items-center justify-center
+                          cursor-pointer
+                          ${bgColor}
+                          ${!isSelectedCell && !isSelectedWord && !isHoveredWord && !isCorrectWord && 'hover:bg-[#b8c5d6]'}
+                          transition-colors duration-150
+                          shadow-sm
+                          rounded-sm
+                        `}
+                      >
+                        <span className={`
+                          text-base sm:text-lg md:text-xl font-bold
+                          text-blue-600 drop-shadow-sm
+                        `}>
+                          {cell.symbol}
+                        </span>
+                      </div>
+                    )
+                  } else {
+                    // Empty space - absolutely nothing
+                    return (
+                      <div
+                        key={`${lineIndex}-${cellIndex}`}
+                        className="
+                          w-10 h-10 xs:w-12 xs:h-12 sm:w-14 sm:h-14 md:w-16 md:h-16
+                        "
+                      />
+                    );
+                  }
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Win message when all words are correct */}
+        {words && correct && correct.length === words.length && (
+          <div className="mt-6 p-6 bg-gradient-to-r from-green-400 to-emerald-500 border-2 border-white/50 rounded-xl shadow-2xl w-full max-w-md text-center animate-bounce">
+            <h2 className="text-3xl font-bold text-white mb-2">🎉 ПОБЕДА! 🎉</h2>
+            <p className="text-white/90 text-lg">Ты разгадал все слова!</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Minimal hint */}
+      {wordCoords && wordCoords.length > 0 && (
+        <div className="mt-8 text-center text-sm text-white/70">
+          {wordCoords.length} слов • кликни на клетку
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 }

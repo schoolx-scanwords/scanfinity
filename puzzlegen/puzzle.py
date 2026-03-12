@@ -49,7 +49,8 @@ class Puzzle():
                 "id": len(self.words),
                 "word": word,
                 "riddle": riddle,
-                "coords": [x, y, len(word)]
+                "coords": [x, y, len(word)],
+                "direction": "down" if direction else "right"
                 })
 
         else:
@@ -71,12 +72,14 @@ class Puzzle():
 
 
 if __name__ == "__main__":
-    pzl = Puzzle(20)
-    pzl.insert("картошка", 3, 5, True)
-    pzl.insert("морковка", 2, 9, False)
-    pzl.insert("огурец", 6, 9, True)
-    pzl.insert("говнецо", 11, 10, True)
-    pzl.insert("мясо", 15, 15, False)
+    pzl = Puzzle(18)
+    pzl.insert("картошка", 3, 5, True, riddle="самый белорусский овощ")
+    pzl.insert("морковка", 2, 9, False, "типо зайцы такое едят наверное")
+    pzl.insert("огурец", 6, 9, True, "самый дорогой овощ сейчас в россии")
+    pzl.insert("хуесос", 5, 11, False, "макан")
+    pzl.insert("цыгане", 6, 14, False, "ненавижу, блять, [Х]!!!")
+    pzl.insert("амонгас", 9, 9, True, "красный всегда убийца")
+    pzl.insert("негр", 11, 13, True, "у него сосал Лимонов")
     pzl.log()
     print()
     with open('puzzlegen/puzzle.json', 'w') as f:
