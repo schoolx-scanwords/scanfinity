@@ -1,33 +1,18 @@
-version: '3.8'
-
 services:
-  scanfinity:
+  postgres:
+    container_name: postgresdb
     image: postgres:16
-    container_name: scanfinity_db
     environment:
-      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
-      POSTGRES_USER: $POSTGRES_USER
-      POSTGRES_DB: $POSTGRES_DB
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /data/postgres
     volumes:
-      - scanfinity-data:/var/lib/postgresql/data
-      - ./postgres/scanfinity_db.sql:/docker-entrypoint-initdb.d/scanfinity_db.sql
-    restart: unless-stopped
+       - postgres:/data/postgres
+    ports:
+      - "${POSTGRES_PORT}:5432"
     networks:
-      - scanfinity-net
+      - postgres
+    restart: unless-stopped
 
-  # ubuntu:
-  #   image: ubuntu:latest
-  #   container_name: scanfinity_ubuntu
-  #   command: tail -f /dev/null
-  #   ports:
-  #     - "8000:8000"
-  #   networks:
-  #     - scanfinity-net
-
-networks:
-  scanfinity-net:
-    driver: bridge
 volumes:
-  scanfinity-data:
+    postgres:
