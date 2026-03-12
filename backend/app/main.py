@@ -22,12 +22,25 @@ class PuzzleGuess(BaseModel):
 app = FastAPI()
 
 current_dir = os.path.dirname(__file__)  
-
 nextjs_output_path = os.path.abspath(os.path.join(current_dir, "..", "..", "frontend", "out"))
-
 app.mount("/game", StaticFiles(directory=nextjs_output_path, html=True), name="game")
-
 JSON_FILE_PATH =  os.path.abspath(os.path.join(current_dir, "..", "..", "puzzlegen", "puzzle.json"))
+
+def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
+    correct_words = {word["id"]: word["word"] for word in puzzle_data["words"]}
+    guessed_words = {word.id: word.word.lower() for word in guesses.words}
+    correctly_guessed = []
+    for id in guessed_words.keys():
+        if guessed_words[id] == correct_words[id]:
+            correctly_guessed.append(id)
+    
+    if len(correctly_guessed) != len(puzzle_data["words"]):
+        game_state = "playing"
+    else:
+        game_state = "game_over"
+
+    return correctly_guessed, game_state
+
 
 @app.get("/api/grid")
 async def get_grid():
@@ -57,33 +70,10 @@ async def check(guesses: PuzzleGuess):
     with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
         puzzle_data = json.load(f)
 
-    correct_words = {word["id"]: word["word"] for word in puzzle_data["words"]}
-    guessed_words = {word.id: word.word.lower() for word in guesses.words}
-    correctly_guessed = []
-    for id in guessed_words.keys():
-        if guessed_words[id] == correct_words[id]:
-            correctly_guessed.append(id)
-
-
-    return {"guessed": correctly_guessed}
-
-@app.post("/api/check_word")
-async def check(guess: WordGuess):
+    correctly_guessed, game_state = check_if_solved(puzzle_data, guesses)
     
-    pzl_id = guess.pzl_id
-    word_id = guess.word.id
-    word = guess.word.word.lower()
-
-    with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
-        puzzle_data = json.load(f)
-
-    correct = puzzle_data["words"][word_id]["word"].lower() == word
-    if correct:
-        return {"guessed": word_id}
-    else:
-        return {"guessed": None}
-
-    
+    return {"guessed": correctly_guessed, "game_state": game_state}
+  
 
 @app.get("/")
 async def root():

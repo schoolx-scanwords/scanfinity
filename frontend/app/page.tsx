@@ -286,41 +286,10 @@ useEffect(() => {
     }
 
     if (event.key === 'Enter') {
-      if (selectedWord !== null) {
-        const word = collectWord(grid, wordCoords, selectedWord);
-        const wordGuess: WordGuess = {
-          pzl_id: puzzleId!, 
-          word: word
-        }
-        fetch('http://localhost:8000/api/check_word', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(wordGuess)
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.guessed !== null) {
-            if (!correct) {
-              setCorrect([data.guessed])
-            }
-            else {
-              setCorrect([...correct, data.guessed])
-            }
-          }
-        })
-        .catch(error => {
-          console.error('Error checking puzzle:', error);
-        });
-      }
-    }
-
-    if (event.key === 'Tab') {
       event.preventDefault();
       if (selectedWord !== null && puzzleId !== null) {
         const guess = collectPuzzle(grid, wordCoords, puzzleId);
-        fetch('http://localhost:8000/api/check_puzzle', {
+        fetch('/api/check_puzzle', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -592,7 +561,6 @@ return (
                           ${bgColor}
                           ${!isSelectedCell && !isSelectedWord && !isHoveredWord && !isCorrectWord && 'hover:bg-[#b8c5d6]'}
                           transition-colors duration-150
-                          shadow-sm
                           rounded-sm
                         `}
                       >

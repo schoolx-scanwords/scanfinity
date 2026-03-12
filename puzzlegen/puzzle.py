@@ -60,7 +60,7 @@ class Puzzle():
 
     def log(self):
         for row in self.grid:
-            print(row)
+            print(list(''.join(row).replace("0", "_").replace("#", "_").replace("%", "_")))
 
     def json(self):
 
@@ -75,11 +75,18 @@ if __name__ == "__main__":
     pzl = Puzzle(18)
     pzl.insert("картошка", 3, 5, True, riddle="самый белорусский овощ")
     pzl.insert("морковка", 2, 9, False, "типо зайцы такое едят наверное")
+    pzl.insert("мадагаскар", 2, 6, False, "в этом мультике был бегемот который любит больших и попастых")
+    pzl.insert("колёса", 8, 2, True, "их можно (было) найти у оффисного стула и у паши техника")
+    pzl.insert("рофл", 11, 16, False, "умора, потеха, веселуха - или же шутка в интернете")
+    pzl.insert("жираф", 13, 12, True, "длинный чувак из мультика про который была загадка с бегемотом")
+    pzl.insert("базовый", 5, 3, False, '"это __ минимум"')
+    pzl.insert("борат", 5, 3, True, "нрааааааааица")
     pzl.insert("огурец", 6, 9, True, "самый дорогой овощ сейчас в россии")
     pzl.insert("хуесос", 5, 11, False, "макан")
     pzl.insert("цыгане", 6, 14, False, "ненавижу, блять, [Х]!!!")
     pzl.insert("амонгас", 9, 9, True, "красный всегда убийца")
     pzl.insert("негр", 11, 13, True, "у него сосал Лимонов")
+    pzl.insert("жопа", 13, 12, False, "это типо когда завал по работе или сгорел дом")
     pzl.log()
     print()
     with open('puzzlegen/puzzle.json', 'w') as f:
