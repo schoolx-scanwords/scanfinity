@@ -9,6 +9,7 @@ from sqlalchemy import (
 )
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from typing import Optional
 
 Base = declarative_base()
 
@@ -30,11 +31,16 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
 
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
 class UserOut(BaseModel):
     id: int
     username: str
     email: EmailStr
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
