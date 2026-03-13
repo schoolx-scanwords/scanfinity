@@ -10,6 +10,7 @@ from .db import get_session
 
 router = APIRouter()
 
+
 def _hash_password(password: str) -> tuple[str, str]:
     salt = os.urandom(16)
     password_hash = hashlib.pbkdf2_hmac(
