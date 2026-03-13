@@ -1,15 +1,16 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, FileResponse
 import os
-import json
-from models.puzzle import PuzzleGuess, WordGuess
+
 from typing import List
+
+from models.puzzle import PuzzleGuess, WordGuess
+from database.game import get_puzzle_by_id
 
 router = APIRouter()
 
-current_dir = os.path.dirname(__file__)
 nextjs_output_path = os.path.abspath(os.path.join( "..", "..", "frontend", "out"))
-JSON_FILE_PATH = os.path.abspath(os.path.join( "..", "..", "puzzlegen", "puzzle.json"))
+
 
 def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
     correct_words = {word["id"]: word["word"] for word in puzzle_data["words"]}
@@ -28,25 +29,27 @@ def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
 
 @router.get("/api/game/grid")
 async def get_grid():
-    with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
-        grid_data = json.load(f)
-        blank_words = []
-        for word in grid_data["words"]:
-            blank_words.append({
-                "id": word["id"],
-                "riddle": word["riddle"],
-                "coords": word["coords"],
-                "direction": word["direction"]
-            })
-        response = {"id": grid_data["id"], "blank": grid_data["blank"], "words": blank_words}
+
+    pzl = get_puzzle_by_id(8706)[6]
+
+    blank_words = []
+    for word in pzl["words"]:
+        blank_words.append({
+            "id": word["id"],
+            "riddle": word["riddle"],
+            "coords": word["coords"],
+            "direction": word["direction"]
+        })
+    response = {"id": pzl["id"], "blank": pzl["blank"], "words": blank_words}
+
     return JSONResponse(content=response)
 
 @router.post("/api/game/check_puzzle")
 async def check(guesses: PuzzleGuess): 
-    with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
-        puzzle_data = json.load(f)
 
-    correctly_guessed, game_state = check_if_solved(puzzle_data, guesses)
+    pzl = get_puzzle_by_id(8706)[6]
+
+    correctly_guessed, game_state = check_if_solved(pzl, guesses)
     
     return {"guessed": correctly_guessed, "game_state": game_state}
 
