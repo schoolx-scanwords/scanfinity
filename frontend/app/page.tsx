@@ -130,7 +130,7 @@ export default function Home() {
   useEffect(() => {
     const fetchPuzzle = async () => {
       try {
-        const response = await fetch('/api/grid');
+        const response = await fetch('/api/game/grid');
         const data = await response.json();
         
         const parsePuzzle: Puzzle = {
@@ -289,7 +289,7 @@ useEffect(() => {
       event.preventDefault();
       if (selectedWord !== null && puzzleId !== null) {
         const guess = collectPuzzle(grid, wordCoords, puzzleId);
-        fetch('/api/check_puzzle', {
+        fetch('/api/game/check_puzzle', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
