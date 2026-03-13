@@ -9,7 +9,9 @@ idna==3.11
 packaging==26.0
 pydantic==2.12.5
 pydantic_core==2.41.5
+email-validator==2.2.0
 starlette==0.52.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.41.0
+sqlalchemy
