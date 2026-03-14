@@ -44,8 +44,8 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 
 
 @router.post("/api/auth/login", response_model=TokenWithUser)
-async def login(user_in: UserLogin, session: AsyncSession = Depends(get_session)):
-    stmt = select(User).where(User.username == user_in.username)
+async def login(login_data: UserLogin, session: AsyncSession = Depends(get_session)):
+    statement = select(User).where(User.username == user_in.username)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
 
