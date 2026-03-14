@@ -44,3 +44,17 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class TokenWithUser(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+    class Config:
+        from_attributes = True
