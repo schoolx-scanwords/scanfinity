@@ -1,13 +1,35 @@
+import os
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import hashlib
-import secrets
 
-from .models import User, UserOut, UserLogin
+from .models import User, UserLogin, TokenWithUser
 from .db import get_session
 
 router = APIRouter()
+
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change_me_please")
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+
+def _create_access_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
 
 
 def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
@@ -21,7 +43,7 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
     return secrets.compare_digest(computed_hash, stored_hash)
 
 
-@router.post("/api/auth/login", response_model=UserOut)
+@router.post("/api/auth/login", response_model=TokenWithUser)
 async def login(user_in: UserLogin, session: AsyncSession = Depends(get_session)):
     stmt = select(User).where(User.username == user_in.username)
     result = await session.execute(stmt)
@@ -35,4 +57,10 @@ async def login(user_in: UserLogin, session: AsyncSession = Depends(get_session)
             detail="Invalid username or password",
         )
 
-    return user
+    access_token = _create_access_token({"sub": str(user.id)})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+    }

@@ -22,13 +22,24 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await axios.post("http://localhost:8000/api/auth/login", {
-        username: login,
-        password,
-      });
+      const { data } = await axios.post(
+        "http://localhost:8000/api/auth/login",
+        {
+          username: login,
+          password,
+        }
+      );
+
+      if (typeof window !== "undefined") {
+        if (data?.access_token) {
+          localStorage.setItem("accessToken", data.access_token);
+        }
+        if (data?.user) {
+          localStorage.setItem("currentUser", JSON.stringify(data.user));
+        }
+      }
 
       toast.success("Успешный вход");
-      // при необходимости можно поменять маршрут
       setTimeout(() => {
         router.push("/");
       }, 800);
