@@ -10,7 +10,7 @@ from app.database import get_session
 
 router = APIRouter()
 
-def _hash_password(password: str) -> tuple[str, str]:
+def hash_password(password: str) -> tuple[str, str]:
     salt = os.urandom(16)
     password_hash = hashlib.pbkdf2_hmac(
         "sha256",
@@ -23,8 +23,8 @@ def _hash_password(password: str) -> tuple[str, str]:
 
 @router.post("/api/users", response_model=UserOutDTO, status_code=status.HTTP_201_CREATED)
 async def register_user(user_in: UserCreateDTO, session: AsyncSession = Depends(get_session)):
-    existing_stmt = select(User).where(User.email == user_in.email)
-    result = await session.execute(existing_stmt)
+    existing_statement = select(User).where(User.email == user_in.email)
+    result = await session.execute(existing_statement)
     existing_user = result.scalar_one_or_none()
 
     if existing_user is not None:
@@ -33,9 +33,9 @@ async def register_user(user_in: UserCreateDTO, session: AsyncSession = Depends(
             detail="Email already registered",
         )
 
-    password_hash, password_salt = _hash_password(user_in.password)
+    password_hash, password_salt = hash_password(user_in.password)
 
-    db_user = User(
+    user_data = User(
         username=user_in.username,
         email=user_in.email,
         created_at=datetime.now(),
@@ -43,8 +43,8 @@ async def register_user(user_in: UserCreateDTO, session: AsyncSession = Depends(
         password_salt=password_salt,
     )
 
-    session.add(db_user)
+    session.add(user_data)
     await session.commit()
-    await session.refresh(db_user)
+    await session.refresh(user_data)
 
-    return db_user
+    return user_data
