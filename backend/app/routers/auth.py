@@ -38,6 +38,13 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
         100_000,
     ).hex()
     return secrets.compare_digest(computed_hash, stored_hash)
+
+
+def build_auth_response(user: User, access_token: str) -> TokenWithUserDTO:
+    return TokenWithUserDTO(
+        access_token=access_token,
+        user=user,
+    )
 @router.post("/api/auth/login", response_model=TokenWithUserDTO)
 async def login(login_data: UserLoginDTO, session: AsyncSession = Depends(get_session)):
     statement = select(User).where(User.username == login_data.username)
@@ -60,9 +67,4 @@ async def login(login_data: UserLoginDTO, session: AsyncSession = Depends(get_se
         )
 
     access_token = create_access_token(user.id)
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user,
-    }
+    return build_auth_response(user, access_token)
