@@ -5,7 +5,7 @@ from datetime import datetime
 import hashlib
 import os
 
-from app.models import User, UserCreate, UserOut
+from app.models import User, UserCreateDTO, UserOutDTO
 from app.database import get_session
 
 router = APIRouter()
@@ -22,8 +22,8 @@ def _hash_password(password: str) -> tuple[str, str]:
     return password_hash, salt.hex()
 
 
-@router.post("/api/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register_user(user_in: UserCreate, session: AsyncSession = Depends(get_session)):
+@router.post("/api/users", response_model=UserOutDTO, status_code=status.HTTP_201_CREATED)
+async def register_user(user_in: UserCreateDTO, session: AsyncSession = Depends(get_session)):
     existing_stmt = select(User).where(User.email == user_in.email)
     result = await session.execute(existing_stmt)
     existing_user = result.scalar_one_or_none()

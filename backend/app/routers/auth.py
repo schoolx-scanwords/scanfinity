@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.models import User, UserLogin, TokenWithUser
+from app.models import User, UserLoginDTO, TokenWithUserDTO
 from app.database import get_session
 
 router = APIRouter()
@@ -20,10 +20,10 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
-def _create_access_token(
-    data: dict, expires_delta: Optional[timedelta] = None
+def create_access_token(
+    user_id: int, expires_delta: Optional[timedelta] = None
 ) -> str:
-    to_encode = data.copy()
+    to_encode = {"sub": str(user_id)}
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -32,7 +32,7 @@ def _create_access_token(
     return encoded_jwt
 
 
-def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
+def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
     salt = bytes.fromhex(stored_salt)
     computed_hash = hashlib.pbkdf2_hmac(
         "sha256",
@@ -43,21 +43,28 @@ def _verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
     return secrets.compare_digest(computed_hash, stored_hash)
 
 
-@router.post("/api/auth/login", response_model=TokenWithUser)
-async def login(login_data: UserLogin, session: AsyncSession = Depends(get_session)):
+@router.post("/api/auth/login", response_model=TokenWithUserDTO)
+async def login(login_data: UserLoginDTO, session: AsyncSession = Depends(get_session)):
     statement = select(User).where(User.username == login_data.username)
     result = await session.execute(statement)
     user = result.scalar_one_or_none()
 
-    if user is None or not _verify_password(
-        login_data.password, user.password_hash, user.password_salt
-    ):
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
-    access_token = _create_access_token({"sub": str(user.id)})
+    is_password_valid = verify_password(
+        login_data.password, user.password_hash, user.password_salt
+    )
+    if not is_password_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+
+    access_token = create_access_token(user.id)
 
     return {
         "access_token": access_token,
