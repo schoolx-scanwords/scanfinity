@@ -38,7 +38,6 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
         100_000,
     ).hex()
     return secrets.compare_digest(computed_hash, stored_hash)
-
 @router.post("/api/auth/login", response_model=TokenWithUserDTO)
 async def login(login_data: UserLoginDTO, session: AsyncSession = Depends(get_session)):
     statement = select(User).where(User.username == login_data.username)
