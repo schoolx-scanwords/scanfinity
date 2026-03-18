@@ -5,8 +5,8 @@ from datetime import datetime
 import hashlib
 import os
 
-from .models import User, UserCreate, UserOut
-from .db import get_session
+from app.models import User, UserCreate, UserOut
+from app.database import get_session
 
 router = APIRouter()
 

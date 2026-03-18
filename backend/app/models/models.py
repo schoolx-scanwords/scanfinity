@@ -13,6 +13,7 @@ from typing import Optional
 
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = "Users"
 
@@ -26,6 +27,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     password_salt = Column(String, nullable=False)
 
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
@@ -35,6 +37,7 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+
 
 class UserOut(BaseModel):
     id: int
