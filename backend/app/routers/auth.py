@@ -14,11 +14,9 @@ from app.database import get_session
 
 router = APIRouter()
 
-
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change_me_please")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
 
 def create_access_token(
     user_id: int, expires_delta: Optional[timedelta] = None
@@ -31,7 +29,6 @@ def create_access_token(
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
-
 def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
     salt = bytes.fromhex(stored_salt)
     computed_hash = hashlib.pbkdf2_hmac(
@@ -41,7 +38,6 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
         100_000,
     ).hex()
     return secrets.compare_digest(computed_hash, stored_hash)
-
 
 @router.post("/api/auth/login", response_model=TokenWithUserDTO)
 async def login(login_data: UserLoginDTO, session: AsyncSession = Depends(get_session)):
