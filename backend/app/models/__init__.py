@@ -1,24 +1,19 @@
-from .puzzle import Puzzle, WordGuess, PuzzleGuess, Guess
-from .models import Base, User
-from .dto import (
-    UserCreateDTO,
-    UserLoginDTO,
-    UserOutDTO,
-    TokenDTO,
-    TokenWithUserDTO,
+from .models import (
+    Base,
+    User,
+    UserCreate,
+    UserLogin,
+    UserOut,
+    Token,
+    TokenWithUser,
 )
 
-
 __all__ = [
-    "Puzzle",
-    "WordGuess",
-    "PuzzleGuess"
-    "Guess",
     "Base",
     "User",
-    "UserCreateDTO",
-    "UserLoginDTO",
-    "UserOutDTO",
-    "TokenDTO",
-    "TokenWithUserDTO"
+    "UserCreate",
+    "UserLogin",
+    "UserOut",
+    "Token",
+    "TokenWithUser",
 ]
