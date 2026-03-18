@@ -9,7 +9,6 @@ from sqlalchemy import (
 )
 Base = declarative_base()
 
-
 class User(Base):
     __tablename__ = "Users"
 
@@ -22,7 +21,4 @@ class User(Base):
     product_image = Column(LargeBinary, nullable=True)
     password_hash = Column(String, nullable=False)
     password_salt = Column(String, nullable=False)
-
-
-
 

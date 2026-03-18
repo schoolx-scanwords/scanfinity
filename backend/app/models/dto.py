@@ -3,17 +3,14 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr
 
-
 class UserCreateDTO(BaseModel):
     username: str
     email: EmailStr
     password: str
 
-
 class UserLoginDTO(BaseModel):
     username: str
     password: str
-
 
 class UserOutDTO(BaseModel):
     id: int
@@ -24,11 +21,9 @@ class UserOutDTO(BaseModel):
     class Config:
         from_attributes = True
 
-
 class TokenDTO(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
 
 class TokenWithUserDTO(BaseModel):
     access_token: str
