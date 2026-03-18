@@ -1,19 +1,19 @@
-from .models import (
-    Base,
-    User,
-    UserCreate,
-    UserLogin,
-    UserOut,
-    Token,
-    TokenWithUser,
+from .models import Base, User
+from .dto import (
+    UserCreateDTO,
+    UserLoginDTO,
+    UserOutDTO,
+    TokenDTO,
+    TokenWithUserDTO,
 )
 
 __all__ = [
     "Base",
     "User",
-    "UserCreate",
-    "UserLogin",
-    "UserOut",
-    "Token",
-    "TokenWithUser",
+    "UserCreateDTO",
+    "UserLoginDTO",
+    "UserOutDTO",
+    "TokenDTO",
+    "TokenWithUserDTO",
 ]
+
