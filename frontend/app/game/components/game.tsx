@@ -9,6 +9,7 @@ interface Props {
   onCellUpdate?: (row: number, col: number, letter: string) => void;
   savedGuesses?: number[];
   savedGridState?: Map<string, string>;
+  
 }
 
 // Utility functions
@@ -165,8 +166,23 @@ export default function CrosswordPuzzle({
   };
 
   // Main keyboard handler
+  // In app/game/components/game.tsx
+
+  // Main keyboard handler - COMPLETE VERSION
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      // CRITICAL: Check if user is typing in an input field (like chat)
+      const activeElement = document.activeElement;
+      const isTypingInInput = activeElement?.tagName === 'INPUT' || 
+                              activeElement?.tagName === 'TEXTAREA' ||
+                              (activeElement?.getAttribute('contenteditable') === 'true');
+      
+      // If user is typing in an input, DON'T handle crossword keys
+      if (isTypingInInput) {
+        return;
+      }
+      
+      // Only proceed if crossword is ready
       if (!wordCoords || !selectedCell || !grid || !words) return;
 
       const allCoords = wordCoords.flatMap((word: any) => word?.coords || []);
@@ -207,7 +223,7 @@ export default function CrosswordPuzzle({
       let newRow = row;
       let newCol = col;
 
-      // Arrow keys
+      // Arrow key navigation
       if (event.key.startsWith('Arrow')) {
         event.preventDefault();
         
@@ -274,7 +290,7 @@ export default function CrosswordPuzzle({
         }
       }
 
-      // Enter handler
+      // Enter handler - Check puzzle
       if (event.key === 'Enter') {
         event.preventDefault();
         if (selectedWord !== null && puzzleId !== null) {
@@ -322,7 +338,6 @@ export default function CrosswordPuzzle({
             return response.json();
           })
           .then(data => {
-            console.log('Puzzle check result:', data);
             if (data.guessed !== null) {
               const previousCorrect = correct || [];
               const newGuesses = data.guessed.filter((id: number) => 
@@ -333,7 +348,6 @@ export default function CrosswordPuzzle({
               
               if (onGuessUpdate && newGuesses.length > 0) {
                 newGuesses.forEach((id: number) => {
-                  console.log('Word correctly guessed:', id);
                   const wordLetters = wordLettersMap.get(id);
                   onGuessUpdate(id, wordLetters);
                 });
@@ -353,7 +367,6 @@ export default function CrosswordPuzzle({
         const currentCellIsCorrect = isCellCorrect(col, row);
         if (currentCellIsCorrect) return;
         
-        // Update grid
         const newGrid = {...grid};
         if (newGrid.lines[row]?.cells[col]) {
           newGrid.lines[row].cells[col] = {
@@ -362,13 +375,11 @@ export default function CrosswordPuzzle({
           };
           setGrid(newGrid);
           
-          // Notify parent to save
           if (onCellUpdate) {
             onCellUpdate(row, col, '');
           }
         }
         
-        // Navigate to previous cell
         const currentWord = findWordById(selectedWord, words);
         if (currentWord) {
           if (currentWord.direction === 'right') {
@@ -394,7 +405,7 @@ export default function CrosswordPuzzle({
       }
 
       // Letter handler
-      if (event.key.length === 1) {
+      if (event.key.length === 1 && /[a-zA-Zа-яА-Я]/.test(event.key)) {
         event.preventDefault();
         
         const currentCellIsCorrect = isCellCorrect(col, row);
@@ -402,7 +413,6 @@ export default function CrosswordPuzzle({
         
         const newLetter = event.key.toUpperCase();
         
-        // Update grid
         const newGrid = {...grid};
         if (newGrid.lines[row]?.cells[col]) {
           newGrid.lines[row].cells[col] = {
@@ -411,13 +421,11 @@ export default function CrosswordPuzzle({
           };
           setGrid(newGrid);
           
-          // Notify parent to save
           if (onCellUpdate) {
             onCellUpdate(row, col, newLetter);
           }
         }
 
-        // Navigate to next cell
         const currentWord = findWordById(selectedWord, words);
         
         if (currentWord) {
