@@ -209,3 +209,6 @@ __marimo__/
 *.lock
 *.toml
 *.python-version
+/puzzlegen
+.vscode
+

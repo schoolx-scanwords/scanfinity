@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 import os
 
 from typing import List
@@ -7,10 +7,7 @@ from typing import List
 from models.puzzle import PuzzleGuess, WordGuess
 from database.game import get_puzzle_by_id
 
-router = APIRouter()
-
-nextjs_output_path = os.path.abspath(os.path.join( "..", "..", "frontend", "out"))
-
+router = APIRouter(prefix="/api")
 
 def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
     correct_words = {word["id"]: word["word"] for word in puzzle_data["words"]}
@@ -27,9 +24,8 @@ def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
 
     return correctly_guessed, game_state
 
-@router.get("/api/game/grid")
+@router.get("/game/grid")
 async def get_grid():
-
     pzl = get_puzzle_by_id(8706)[6]
 
     blank_words = []
@@ -44,15 +40,10 @@ async def get_grid():
 
     return JSONResponse(content=response)
 
-@router.post("/api/game/check_puzzle")
+@router.post("/game/check_puzzle")
 async def check(guesses: PuzzleGuess): 
-
     pzl = get_puzzle_by_id(8706)[6]
 
     correctly_guessed, game_state = check_if_solved(pzl, guesses)
     
     return {"guessed": correctly_guessed, "game_state": game_state}
-
-@router.get("/")
-async def root():
-    return FileResponse(os.path.join(nextjs_output_path, "index.html"))

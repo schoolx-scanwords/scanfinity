@@ -1,12 +1,14 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
-  /* config options here */
-  output: 'export', // This generates static files in the 'out' folder
-  basePath: '/game', // This makes all assets load from /games/*
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
   images: {
-    unoptimized: true, // Required for static export
+    unoptimized: true,
   },
-};
+  trailingSlash: true,
+  // This tells Next.js to prefix asset paths with the base path
+  assetPrefix: '/',
+  // Or if you want to be explicit:
+  // basePath: '',
+}
 
-export default nextConfig;
+module.exports = nextConfig

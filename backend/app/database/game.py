@@ -73,3 +73,4 @@ def get_puzzle_by_id(id) -> dict:
 
 # def test():
 #     print(get_puzzle_by_id(8706))
+
