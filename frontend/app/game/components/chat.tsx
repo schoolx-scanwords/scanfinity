@@ -1,7 +1,7 @@
 // app/game/components/chat.tsx
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface ChatMessage {
   id: string;
@@ -18,6 +18,7 @@ interface ChatProps {
 }
 
 const CHAT_STORAGE_KEY = (roomId: string) => `chat_messages_${roomId}`;
+const TAB_SESSION_KEY = (roomId: string) => `tab_session_${roomId}`;
 
 export default function Chat({ sendMessage, isConnected, username, roomId }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -29,21 +30,33 @@ export default function Chat({ sendMessage, isConnected, username, roomId }: Cha
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Load messages from localStorage on mount
   useEffect(() => {
     if (!roomId) return;
     
     try {
-      const savedMessages = localStorage.getItem(CHAT_STORAGE_KEY(roomId));
-      if (savedMessages) {
-        const parsedMessages = JSON.parse(savedMessages);
-        // Convert timestamp strings back to Date objects
-        const messagesWithDates = parsedMessages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }));
-        console.log(`Loaded ${messagesWithDates.length} messages from localStorage`);
-        setMessages(messagesWithDates);
+      // Check if this is a new tab session or a refresh
+      const sessionId = sessionStorage.getItem(TAB_SESSION_KEY(roomId));
+      const isRefresh = sessionId !== null;
+      
+      if (!isRefresh) {
+        // This is a new tab - clear any existing chat history
+        console.log('New tab detected - clearing chat history');
+        sessionStorage.removeItem(CHAT_STORAGE_KEY(roomId));
+        // Set a session marker to identify this tab session
+        sessionStorage.setItem(TAB_SESSION_KEY(roomId), Date.now().toString());
+        setMessages([]);
+      } else {
+        // This is a refresh - load existing messages
+        const savedMessages = sessionStorage.getItem(CHAT_STORAGE_KEY(roomId));
+        if (savedMessages) {
+          const parsedMessages = JSON.parse(savedMessages);
+          const messagesWithDates = parsedMessages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }));
+          console.log(`Loaded ${messagesWithDates.length} messages from sessionStorage (refresh)`);
+          setMessages(messagesWithDates);
+        }
       }
     } catch (error) {
       console.error('Failed to load chat messages:', error);
@@ -52,27 +65,16 @@ export default function Chat({ sendMessage, isConnected, username, roomId }: Cha
     }
   }, [roomId]);
 
-  // Save messages to localStorage whenever they change
+  // Save messages to sessionStorage whenever they change
   useEffect(() => {
     if (!roomId || !isInitialized) return;
     
     try {
-      // Store messages (limit to last 500 to avoid localStorage size issues)
       const messagesToStore = messages.slice(-500);
-      localStorage.setItem(CHAT_STORAGE_KEY(roomId), JSON.stringify(messagesToStore));
-      console.log(`Saved ${messagesToStore.length} messages to localStorage`);
+      sessionStorage.setItem(CHAT_STORAGE_KEY(roomId), JSON.stringify(messagesToStore));
+      console.log(`Saved ${messagesToStore.length} messages to sessionStorage`);
     } catch (error) {
       console.error('Failed to save chat messages:', error);
-      // If localStorage is full, try to clear older messages
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        try {
-          const messagesToStore = messages.slice(-200);
-          localStorage.setItem(CHAT_STORAGE_KEY(roomId), JSON.stringify(messagesToStore));
-          console.log(`Saved ${messagesToStore.length} messages after quota error`);
-        } catch (e) {
-          console.error('Still failed to save after trimming:', e);
-        }
-      }
     }
   }, [messages, roomId, isInitialized]);
 
@@ -80,12 +82,10 @@ export default function Chat({ sendMessage, isConnected, username, roomId }: Cha
     scrollToBottom();
   }, [messages]);
 
-  // Listen for new chat messages from the WebSocket
+  // Listen for new chat messages
   useEffect(() => {
     const handleChatMessage = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('Received new chat message:', data);
-      
       const newMessage: ChatMessage = {
         id: `${Date.now()}-${Math.random()}`,
         username: data.username,
@@ -94,18 +94,14 @@ export default function Chat({ sendMessage, isConnected, username, roomId }: Cha
       };
       
       setMessages(prev => {
-        // Check if message already exists to prevent duplicates
+        // Check for duplicates
         const isDuplicate = prev.some(msg => 
           msg.username === newMessage.username && 
           msg.message === newMessage.message && 
           Math.abs(msg.timestamp.getTime() - newMessage.timestamp.getTime()) < 1000
         );
         
-        if (isDuplicate) {
-          console.log('Duplicate message detected, ignoring');
-          return prev;
-        }
-        
+        if (isDuplicate) return prev;
         return [...prev, newMessage];
       });
     };
@@ -138,7 +134,7 @@ export default function Chat({ sendMessage, isConnected, username, roomId }: Cha
     if (confirm('Are you sure you want to clear chat history?')) {
       setMessages([]);
       if (roomId) {
-        localStorage.removeItem(CHAT_STORAGE_KEY(roomId));
+        sessionStorage.removeItem(CHAT_STORAGE_KEY(roomId));
       }
     }
   };
