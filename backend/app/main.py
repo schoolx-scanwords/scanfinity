@@ -1,10 +1,22 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
 import os
 from routers import game, game_websocket
+from database.connect import close_connection
 
-app = FastAPI()
+from routers.register_user import router as register_user_router
+from routers.auth import router as auth_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await close_connection()
+
+app = FastAPI(lifespan=lifespan)
 
 nextjs_output_path = os.path.abspath(os.path.join("..", "..", "frontend", "out"))
 
@@ -12,6 +24,8 @@ app.mount("/_next", StaticFiles(directory=os.path.join(nextjs_output_path, "_nex
 
 app.include_router(game.router)
 app.include_router(game_websocket.router)
+app.include_router(register_user_router)
+app.include_router(auth_router)
 
 @app.get("/")
 async def serve_root():

@@ -1,11 +1,10 @@
-from fastapi import APIRouter
+# routers/game.py
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-import os
-
 from typing import List
 
 from models.puzzle import PuzzleGuess, WordGuess
-from database.game import get_puzzle_by_id
+from database.game import get_puzzle_by_id, update_times_played
 
 router = APIRouter(prefix="/api")
 
@@ -26,24 +25,38 @@ def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
 
 @router.get("/game/grid")
 async def get_grid():
-    pzl = get_puzzle_by_id(8706)[6]
+    puzzle = await get_puzzle_by_id(5823)
+    
+    if not puzzle:
+        raise HTTPException(status_code=404, detail="Puzzle not found")
+    
+    pzl = puzzle.get('jsonb', {})
+    puzzle_id = puzzle.get('puzzle_id')
 
     blank_words = []
-    for word in pzl["words"]:
+    for word in pzl.get("words", []):
         blank_words.append({
             "id": word["id"],
             "riddle": word["riddle"],
             "coords": word["coords"],
             "direction": word["direction"]
         })
-    response = {"id": pzl["id"], "blank": pzl["blank"], "words": blank_words}
+    response = {"id": puzzle_id, "blank": pzl.get("blank", []), "words": blank_words}
 
     return JSONResponse(content=response)
 
 @router.post("/game/check_puzzle")
 async def check(guesses: PuzzleGuess): 
-    pzl = get_puzzle_by_id(8706)[6]
-
+    puzzle = await get_puzzle_by_id(5823)
+    
+    if not puzzle:
+        raise HTTPException(status_code=404, detail="Puzzle not found")
+    
+    pzl = puzzle.get('jsonb', {})
+    
     correctly_guessed, game_state = check_if_solved(pzl, guesses)
+    
+    if game_state == "game_over":
+        await update_times_played(8706)
     
     return {"guessed": correctly_guessed, "game_state": game_state}
