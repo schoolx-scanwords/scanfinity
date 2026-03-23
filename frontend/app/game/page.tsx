@@ -137,9 +137,10 @@ export default function GamePage() {
         playerId: myId,
         name: myName,
         guessedIds: myGuessedIds,
-        gridState: myGridStateArray
+        gridState: myGridStateArray,
+        requestChatHistory: true // Request chat history on join
       }));
-    };
+    }
     
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -202,6 +203,15 @@ export default function GamePage() {
       // Chat messages - forward to chat component via window event or context
       if (data.type === 'chat_message') {
         window.dispatchEvent(new CustomEvent('chat-message', { detail: data }));
+      }
+
+      if (data.type === 'chat_history') {
+        console.log(`Received ${data.messages?.length || 0} historical chat messages`);
+        if (data.messages && Array.isArray(data.messages)) {
+          data.messages.forEach((msg: any) => {
+            window.dispatchEvent(new CustomEvent('chat-message', { detail: msg }));
+          });
+        }
       }
     };
     
@@ -346,6 +356,7 @@ export default function GamePage() {
               sendMessage={sendChatMessage}
               isConnected={isConnected}
               username={myName}
+              roomId={roomId} 
             />
           </div>
           
