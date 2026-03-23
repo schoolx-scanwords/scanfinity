@@ -10,6 +10,7 @@ from app.database import get_session
 
 router = APIRouter()
 
+
 def hash_password(password: str) -> tuple[str, str]:
     salt = os.urandom(16)
     password_hash = hashlib.pbkdf2_hmac(
@@ -48,3 +49,10 @@ async def register_user(user_in: UserCreateDTO, session: AsyncSession = Depends(
     await session.refresh(user_data)
 
     return user_data
+
+
+@router.get("/api/users", response_model=list[UserOutDTO])
+async def list_users(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(User))
+    users = result.scalars().all()
+    return users
