@@ -3,8 +3,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List
 
-from models.puzzle import PuzzleGuess, WordGuess
-from database.game import get_puzzle_by_id, update_times_played
+from ..models.puzzle import PuzzleGuess, WordGuess
+from ..database.game import get_puzzle_by_id, update_times_played
 
 router = APIRouter(prefix="/api")
 

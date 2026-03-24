@@ -6,8 +6,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA: /data/postgres
+    env_file:
+      - .env
     volumes:
        - postgres:/data/postgres
+       - ./postgres/scanfinity_db.sql:/docker-entrypoint-initdb.d/scanfinity_db.sql:ro
     ports:
       - "${POSTGRES_PORT}:5432"
     networks:
@@ -16,3 +19,7 @@ services:
 
 volumes:
     postgres:
+
+networks:
+  postgres:
+    driver: bridge

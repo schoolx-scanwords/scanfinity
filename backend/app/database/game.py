@@ -3,7 +3,6 @@ from psycopg.types.json import Jsonb
 from .connect import connect
 from . import Puzzle
 import json
-import asyncio
 
 # Global pool reference
 _pool = None

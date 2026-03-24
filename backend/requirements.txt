@@ -17,3 +17,6 @@ uvicorn==0.41.0
 sqlalchemy
 PyJWT==2.12.1
 asyncpg
+psycopg
+dotenv
+psycopg_pool
