@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function RegisterPage() {
   const [nickname, setNickname] = useState('');
@@ -17,7 +18,7 @@ export default function RegisterPage() {
 
     try {
       console.log('Sending register request', { nickname, email });
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -129,9 +130,9 @@ export default function RegisterPage() {
           <div className="mt-6 text-center text-sm text-gray-500">
             <p>
               Уже есть аккаунт?{' '}
-              <a href="/login" className="hover:text-green-600 underline">
+              <Link href="/login" className="hover:text-green-600 underline">
                 Войти
-              </a>
+              </Link>
             </p>
           </div>
         </div>

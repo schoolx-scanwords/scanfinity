@@ -1,6 +1,6 @@
 // frontend/app/page.tsx
-import { redirect } from 'next/navigation';
+import MenuPage from './menu/page';
 
 export default function HomePage() {
-  redirect('/register');
+  return <MenuPage />;
 }
