@@ -1,14 +1,14 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:8000/api/:path*",
-      },
-    ];
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  images: {
+    unoptimized: true,
   },
-};
+  trailingSlash: true,
+  // This tells Next.js to prefix asset paths with the base path
+  assetPrefix: '/',
+  // Or if you want to be explicit:
+  // basePath: '',
+}
 
-export default nextConfig;
+module.exports = nextConfig
