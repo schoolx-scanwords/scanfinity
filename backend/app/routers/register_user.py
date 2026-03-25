@@ -25,6 +25,11 @@ async def register_user(user_in: UserCreateDTO):
     
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            # Явно вычисляем новый id, чтобы не зависеть от автоинкремента
+            await cur.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM "Users"')
+            row = await cur.fetchone()
+            new_id = row[0] if row else 1
+
             await cur.execute(
                 'SELECT * FROM "Users" WHERE email = %s',
                 [user_in.email]
@@ -42,11 +47,12 @@ async def register_user(user_in: UserCreateDTO):
             await cur.execute(
                 """
                 INSERT INTO "Users" 
-                (username, email, created_at, password_hash, password_salt) 
-                VALUES (%s, %s, %s, %s, %s)
+                (id, username, email, created_at, password_hash, password_salt) 
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id, username, email, created_at
                 """,
                 (
+                    new_id,
                     user_in.username,
                     user_in.email,
                     datetime.now(),

@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from typing import List
 
 from models.puzzle import PuzzleGuess, WordGuess
-from database.game import get_puzzle_by_id, update_times_played
+from database.game import get_puzzle_by_id, get_latest_puzzle, update_times_played
 
 router = APIRouter(prefix="/api")
 
@@ -25,7 +25,8 @@ def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
 
 @router.get("/game/grid")
 async def get_grid():
-    puzzle = await get_puzzle_by_id(5823)
+    # Берём последний добавленный пазл, чтобы не завязываться на конкретный ID
+    puzzle = await get_latest_puzzle()
     
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
@@ -47,7 +48,8 @@ async def get_grid():
 
 @router.post("/game/check_puzzle")
 async def check(guesses: PuzzleGuess): 
-    puzzle = await get_puzzle_by_id(5823)
+    # Проверяем тот же пазл, что вернули в /game/grid
+    puzzle = await get_latest_puzzle()
     
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
@@ -56,7 +58,7 @@ async def check(guesses: PuzzleGuess):
     
     correctly_guessed, game_state = check_if_solved(pzl, guesses)
     
-    if game_state == "game_over":
-        await update_times_played(8706)
+    if game_state == "game_over" and puzzle:
+        await update_times_played(puzzle.get("puzzle_id"))
     
     return {"guessed": correctly_guessed, "game_state": game_state}

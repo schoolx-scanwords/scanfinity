@@ -1,9 +1,3 @@
-/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Add this at the bottom */
-.grid-cols-20 {
-  grid-template-columns: repeat(20, minmax(0, 1fr)) !important;
-}

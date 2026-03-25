@@ -21,8 +21,8 @@ export default function HomePage() {
           Click below to start your journey!
         </p>
 
-        {/* Play button - redirects to game page */}
-        <Link href="/game">
+        {/* Play button - redirects to login page */}
+        <Link href="/login">
           <button className="group relative px-8 py-4 bg-white rounded-full text-xl font-bold text-[#667eea] overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl">
             {/* Animated background effect */}
             <span className="absolute inset-0 bg-gradient-to-r from-[#f6d5f7] to-[#fbe9d7] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>

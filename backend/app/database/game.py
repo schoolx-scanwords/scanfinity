@@ -82,6 +82,27 @@ async def get_puzzle_by_id(puzzle_id: int) -> dict | None:
                 return row_dict
             return None
 
+async def get_latest_puzzle() -> dict | None:
+    """Get the latest puzzle by puzzle_id asynchronously"""
+    pool = await get_pool()
+
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'SELECT * FROM "Puzzles" ORDER BY puzzle_id DESC LIMIT 1'
+            )
+            row = await cur.fetchone()
+
+            if row:
+                columns = [desc[0] for desc in cur.description]
+                row_dict = dict(zip(columns, row))
+
+                if 'jsonb' in row_dict and isinstance(row_dict['jsonb'], str):
+                    row_dict['jsonb'] = json.loads(row_dict['jsonb'])
+
+                return row_dict
+            return None
+
 async def get_puzzle_jsonb(puzzle_id: int) -> dict | None:
     """Get only the JSONB data of a puzzle asynchronously"""
     pool = await get_pool()
