@@ -17,12 +17,17 @@ export default function CreateLobbyPage() {
     const trimmed = roomId.trim();
     if (!trimmed) return;
 
+    // Добавляем лимит игроков прямо в идентификатор комнаты для наглядности в URL
+    const combinedRoomId = `${trimmed}{${playerCount}}`;
+
     if (typeof window !== 'undefined') {
+      // Сохраняем исходный ID и лимит игроков отдельно
       localStorage.setItem('last_room', trimmed);
       localStorage.setItem('room_max_players', String(playerCount));
     }
 
-    router.push(`/game?room=${encodeURIComponent(trimmed)}`);
+    // В URL будет видно и ID комнаты, и максимальное число игроков
+    router.push(`/game?room=${encodeURIComponent(combinedRoomId)}`);
   };
 
   return (
