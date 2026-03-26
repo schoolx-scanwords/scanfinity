@@ -9,6 +9,8 @@ from database.connect import close_connection
 
 from routers.register_user import router as register_user_router
 from routers.auth import router as auth_router
+from routers.game import router as game_router
+from routers.game_websocket import router as game_websocket_router
 
 
 @asynccontextmanager
@@ -22,8 +24,8 @@ nextjs_output_path = os.path.abspath(os.path.join("..", "..", "frontend", "out")
 
 app.mount("/_next", StaticFiles(directory=os.path.join(nextjs_output_path, "_next")), name="next")
 
-app.include_router(game.router)
-app.include_router(game_websocket.router)
+app.include_router(game_router)
+app.include_router(game_websocket_router)
 app.include_router(register_user_router)
 app.include_router(auth_router)
 
