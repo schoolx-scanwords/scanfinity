@@ -25,7 +25,7 @@ def check_if_solved(puzzle_data: dict, guesses: List[WordGuess]):
 
 @router.get("/game/grid")
 async def get_grid():
-    puzzle = await get_puzzle_by_id(5823)
+    puzzle = await get_puzzle_by_id(4669)
     
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
@@ -47,7 +47,7 @@ async def get_grid():
 
 @router.post("/game/check_puzzle")
 async def check(guesses: PuzzleGuess): 
-    puzzle = await get_puzzle_by_id(5823)
+    puzzle = await get_puzzle_by_id(4669)
     
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
@@ -57,6 +57,6 @@ async def check(guesses: PuzzleGuess):
     correctly_guessed, game_state = check_if_solved(pzl, guesses)
     
     if game_state == "game_over":
-        await update_times_played(8706)
+        await update_times_played(4669)
     
     return {"guessed": correctly_guessed, "game_state": game_state}

@@ -3,12 +3,15 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, Set, Any
 import json
 from datetime import datetime
+import re
 
 router = APIRouter()
 
 class GameRoom:
-    def __init__(self):
+    def __init__(self, players):
         self.connections: Dict[WebSocket, dict] = {}
+        self.max_players = players
+        self.players_ready = 0
     
     def add_player(self, websocket: WebSocket, player_data: dict):
         self.connections[websocket] = player_data
@@ -36,14 +39,29 @@ class GameRoom:
 # Store rooms
 rooms: Dict[str, GameRoom] = {}
 
+
+players = r'\{(\d+)\}'
+def get_max_players(room_id):
+    matches = re.findall(players, room_id)
+    if len(matches) > 1 or len(matches) < 1:
+        return None
+    return int(matches[0])
+
+
 @router.websocket("/ws/game/{room_id}")
 async def game_websocket(websocket: WebSocket, room_id: str):
     await websocket.accept()
     print(f"✅ WebSocket connected to room: {room_id}")
     
+    players = get_max_players(room_id)
+    if players is None:
+        await websocket.close(code=1008, reason="invalid room id")
+
     # Create room if it doesn't exist
     if room_id not in rooms:
-        rooms[room_id] = GameRoom()
+        rooms[room_id] = GameRoom(players)
+    elif len(rooms[room_id].connections) >= players:
+        await websocket.close(code=1008, reason="room is full")
     
     room = rooms[room_id]
     player_data = None
@@ -87,6 +105,11 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                             })
                         except:
                             pass
+
+                await websocket.send_json({
+                    "type": "ready_update",
+                    "ready": room.players_ready
+                })
             
             # Handle game update (guesses, grid state)
             elif msg_type == "player_update":
@@ -108,7 +131,24 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                             })
                         except:
                             pass
+            elif msg_type == "get_ready_players":
+                await websocket.send_json({
+                    "type": "ready_update",
+                    "ready": room.players_ready
+                })
             
+            elif msg_type == "ready_update":
+                room.players_ready += 1
+
+                for connection in room.connections:
+                    if connection != websocket:
+                        await connection.send_json({
+                            "type": "ready_update",
+                            "ready": room.players_ready
+                        })
+                        print('sent ready update')
+
+
             # Handle chat message
             elif msg_type == "message":
                 sender_name = room.get_player_name(websocket)

@@ -6,6 +6,8 @@ import { usePuzzleData } from '../hooks/use_puzzle_data';
 import CrosswordPuzzle from './components/game';
 import OpponentView from './components/opponent_view';
 import Chat from './components/chat';
+import { useRouter } from 'next/navigation';
+import { Ready, GameOver} from './components/room';
 
 interface Player {
   id: string;
@@ -21,11 +23,25 @@ const STORAGE_KEYS = {
   OPPONENTS: (roomId: string) => `game_opponents_${roomId}`,
 };
 
+const getMaxPlayersFromRoomId = (roomId: string): number => {
+  const match = roomId.match(/\{(\d+)\}/);
+  if (match && match[1]) {
+    return parseInt(match[1], 10);
+  }
+  return 2;
+};
+
 export default function GamePage() {
+  const router = useRouter();
   const { grid, words, wordCoords, puzzleId, loading } = usePuzzleData();
   const [roomId, setRoomId] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [isReady, setIsReady] = useState(false);
+  const [currentPlayers, setCurrentPlayers] = useState(0);
+  const [gameInProgress, setGameInProgress] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
   
   const [myId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
@@ -57,6 +73,33 @@ export default function GamePage() {
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  useEffect(() => {
+    setMaxPlayers(getMaxPlayersFromRoomId(roomId))
+  }, [maxPlayers, roomId])
+
+  useEffect(() => {
+    if (currentPlayers === maxPlayers) {
+      setGameInProgress(true)
+    }
+  })
+
+  const toggleReady = () => {
+    if (!isReady) {
+      setIsReady(true);
+    }
+    setCurrentPlayers(prevPlayers => prevPlayers + 1);
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({
+        type: 'ready_update',
+        increment: 1
+      }));
+    }
+  } 
+
+  const handleGameComplete = () => {
+    setGameOver(true);
+  }
 
   useEffect(() => {
     if (!isClient) return;
@@ -138,14 +181,19 @@ export default function GamePage() {
         name: myName,
         guessedIds: myGuessedIds,
         gridState: myGridStateArray,
-        requestChatHistory: true // Request chat history on join
+        requestChatHistory: true 
       }));
+
     }
     
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log('📨 Received:', data.type);
       
+      if (data.type === 'ready_update') {
+        setCurrentPlayers(data.ready)
+      }
+
+
       // Game updates
       if (data.type === 'players_update') {
         const newPlayers = new Map();
@@ -193,6 +241,7 @@ export default function GamePage() {
       }
       
       if (data.type === 'player_left') {
+        setCurrentPlayers(prev => prev -1)
         setPlayers(prev => {
           const updated = new Map(prev);
           updated.delete(data.playerId);
@@ -223,6 +272,13 @@ export default function GamePage() {
     websocket.onclose = () => {
       console.log('🔌 WebSocket disconnected');
       setIsConnected(false);
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({
+          type: 'ready_update',
+          increment: -1
+        }));
+      }
+    //  router.push('/')
     };
     
     wsRef.current = websocket;
@@ -332,99 +388,120 @@ export default function GamePage() {
   const totalWords = wordCoords.length;
   const otherPlayers = Array.from(players.values()).filter(p => p.id !== myId);
 
+  console.log('Debug:', {
+  currentPlayers,
+  maxPlayers,
+  gameInProgress,
+  shouldShow: currentPlayers < maxPlayers && !gameInProgress
+  });
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] p-6">
-      <div className="max-w-full mx-auto">
-        {/* Connection Status */}
-        <div className="mb-6 flex justify-center">
-          {isConnected ? (
-            <div className="bg-green-500/20 text-green-200 px-4 py-2 rounded-lg text-sm">
-              ✅ Connected | Players: {players.size + 1} | Words: {myGuessedIds.length}/{totalWords}
-            </div>
-          ) : (
-            <div className="bg-yellow-500/20 text-yellow-200 px-4 py-2 rounded-lg text-sm">
-              🔌 Connecting...
-            </div>
-          )}
-        </div>
-
-        {/* 3-column layout */}
-        <div className="flex flex-col lg:flex-row gap-6 justify-center items-start">
-          {/* LEFT - Chat - receives sendMessage function */}
-          <div className="lg:w-80 flex-shrink-0">
-            <Chat 
-              sendMessage={sendChatMessage}
-              isConnected={isConnected}
-              username={myName}
-              roomId={roomId} 
-            />
-          </div>
-          
-          {/* MIDDLE - Game */}
-          <div className="flex-shrink-0">
-            <CrosswordPuzzle 
-              puzzleData={{ grid, words, wordCoords, puzzleId }}
-              onGuessUpdate={handleGuessUpdate}
-              onCellUpdate={handleCellUpdate}
-              savedGuesses={myGuessedIds}
-              savedGridState={myGridStateMap}
-            />
-          </div>
-          
-          {/* RIGHT - Opponents */}
-          <div className="lg:w-80 flex-shrink-0">
-            <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl">
-              <h2 className="text-white text-lg font-semibold mb-4 pb-2 border-b border-white/20">
-                Opponents
-              </h2>
-              
-              {/* You */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white font-medium">You</span>
-                  <span className="text-white/70 text-sm">
-                    {myGuessedIds.length}/{totalWords}
-                  </span>
-                </div>
-                <OpponentView 
-                  grid={grid}
-                  wordCoords={wordCoords}
-                  guessedWordIds={myGuessedIds}
-                  size="sm"
-                />
+    <>
+      {/* Main content */}
+      <main className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] p-6">
+        <div className="max-w-full mx-auto">
+          {/* Connection Status */}
+          <div className="mb-6 flex justify-center">
+            {isConnected ? (
+              <div className="bg-green-500/20 text-green-200 px-4 py-2 rounded-lg text-sm">
+                ✅ Connected | Players: {players.size + 1} | Words: {myGuessedIds.length}/{totalWords}
               </div>
+            ) : (
+              <div className="bg-yellow-500/20 text-yellow-200 px-4 py-2 rounded-lg text-sm">
+                🔌 Connecting...
+              </div>
+            )}
+          </div>
 
-              {/* Other Players */}
-              {otherPlayers.map((player) => (
-                <div key={player.id} className="mb-4">
+          {/* 3-column layout */}
+          <div className="flex flex-col lg:flex-row gap-6 justify-center items-start">
+            {/* LEFT - Chat - receives sendMessage function */}
+            <div className="lg:w-80 flex-shrink-0">
+              <Chat 
+                sendMessage={sendChatMessage}
+                isConnected={isConnected}
+                username={myName}
+                roomId={roomId} 
+              />
+            </div>
+            
+            {/* MIDDLE - Game */}
+            <div className="flex-shrink-0">
+              <CrosswordPuzzle 
+                puzzleData={{ grid, words, wordCoords, puzzleId }}
+                onGuessUpdate={handleGuessUpdate}
+                onCellUpdate={handleCellUpdate}
+                savedGuesses={myGuessedIds}
+                savedGridState={myGridStateMap}
+                onGameOver={handleGameComplete}
+              />
+            </div>
+            
+            {/* RIGHT - Opponents */}
+            <div className="lg:w-80 flex-shrink-0">
+              <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl">
+                <h2 className="text-white text-lg font-semibold mb-4 pb-2 border-b border-white/20">
+                  Opponents
+                </h2>
+                
+                {/* You */}
+                <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium">{player.name}</span>
+                    <span className="text-white font-medium">You</span>
                     <span className="text-white/70 text-sm">
-                      {player.guessedIds?.length || 0}/{totalWords}
+                      {myGuessedIds.length}/{totalWords}
                     </span>
                   </div>
                   <OpponentView 
                     grid={grid}
                     wordCoords={wordCoords}
-                    guessedWordIds={player.guessedIds || []}
+                    guessedWordIds={myGuessedIds}
                     size="sm"
                   />
                 </div>
-              ))}
 
-              {otherPlayers.length === 0 && (
-                <div className="text-center text-white/50 text-sm py-8">
-                  Waiting for other players...
+                {/* Other Players */}
+                {otherPlayers.map((player) => (
+                  <div key={player.id} className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-medium">{player.name}</span>
+                      <span className="text-white/70 text-sm">
+                        {player.guessedIds?.length || 0}/{totalWords}
+                      </span>
+                    </div>
+                    <OpponentView 
+                      grid={grid}
+                      wordCoords={wordCoords}
+                      guessedWordIds={player.guessedIds || []}
+                      size="sm"
+                    />
+                  </div>
+                ))}
+
+                {otherPlayers.length === 0 && (
+                  <div className="text-center text-white/50 text-sm py-8">
+                    Waiting for other players...
+                  </div>
+                )}
+                <div className="mt-4 pt-3 border-t border-white/10 text-white/50 text-xs text-center">
+                  Press Enter to check words
                 </div>
-              )}
-
-              <div className="mt-4 pt-3 border-t border-white/10 text-white/50 text-xs text-center">
-                Press Enter to check words
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      
+      {(currentPlayers < maxPlayers && !gameInProgress) && (<Ready
+        max_players={maxPlayers}
+        current_players={currentPlayers}
+        ready_state={isReady}
+        onReadyToggle={toggleReady}
+      />)}
+      {gameOver && (<GameOver
+         winner_id='some dude'
+      />)}
+    </>
   );
 }

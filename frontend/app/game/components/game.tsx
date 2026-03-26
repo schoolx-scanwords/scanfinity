@@ -9,7 +9,7 @@ interface Props {
   onCellUpdate?: (row: number, col: number, letter: string) => void;
   savedGuesses?: number[];
   savedGridState?: Map<string, string>;
-  
+  onGameOver?: (gameOver: boolean) => void;
 }
 
 // Utility functions
@@ -68,6 +68,7 @@ export default function CrosswordPuzzle({
   const [isSelected, setIsSelected] = useState<boolean>(false);
   const [selectedCell, setSelectedCell] = useState<[number, number] | null>(null);
   const [correct, setCorrect] = useState<number[]>(savedGuesses);
+  const [gameOver, setGameOver] = useState(false);
   
   // Initialize grid with saved letters - THIS IS THE KEY FIX
   const [grid, setGrid] = useState<any>(() => {
@@ -352,6 +353,9 @@ export default function CrosswordPuzzle({
                   onGuessUpdate(id, wordLetters);
                 });
               }
+              if (data.game_state === "game_over") {
+                setGameOver(true);
+              }
             }
           })
           .catch(error => {
@@ -405,7 +409,7 @@ export default function CrosswordPuzzle({
       }
 
       // Letter handler
-      if (event.key.length === 1 && /[a-zA-Zа-яА-Я]/.test(event.key)) {
+      if (event.key.length === 1 && /[a-zA-Zа-яА-ЯЁё]/.test(event.key)) {
         event.preventDefault();
         
         const currentCellIsCorrect = isCellCorrect(col, row);
