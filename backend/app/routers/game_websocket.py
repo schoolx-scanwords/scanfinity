@@ -12,12 +12,17 @@ class GameRoom:
         self.connections: Dict[WebSocket, dict] = {}
         self.max_players = players
         self.players_ready = 0
+        self.machine_ids: Dict[str, str] = {}
     
     def add_player(self, websocket: WebSocket, player_data: dict):
         self.connections[websocket] = player_data
+        self.machine_ids[player_data["machineId"]] = player_data["playerId"]
     
     def remove_player(self, websocket: WebSocket):
         if websocket in self.connections:
+            machine_id = self.connections[websocket].get("machineId")
+            if machine_id and machine_id in self.machine_ids:
+                del self.machine_ids[machine_id]
             del self.connections[websocket]
     
     def get_all_players(self):
@@ -35,10 +40,11 @@ class GameRoom:
         if websocket in self.connections:
             return self.connections[websocket].get("name", "Unknown")
         return "Unknown"
+    
+    def machine_already_connected(self, machine_id: str) -> bool:
+        return machine_id in self.machine_ids
 
-# Store rooms
 rooms: Dict[str, GameRoom] = {}
-
 
 players = r'\{(\d+)\}'
 def get_max_players(room_id):
@@ -46,7 +52,6 @@ def get_max_players(room_id):
     if len(matches) > 1 or len(matches) < 1:
         return None
     return int(matches[0])
-
 
 @router.websocket("/ws/game/{room_id}")
 async def game_websocket(websocket: WebSocket, room_id: str):
@@ -56,43 +61,49 @@ async def game_websocket(websocket: WebSocket, room_id: str):
     players = get_max_players(room_id)
     if players is None:
         await websocket.close(code=1008, reason="invalid room id")
+        return
 
-    # Create room if it doesn't exist
     if room_id not in rooms:
         rooms[room_id] = GameRoom(players)
-    elif len(rooms[room_id].connections) >= players:
-        await websocket.close(code=1008, reason="room is full")
     
     room = rooms[room_id]
     player_data = None
     player_id = None
+    machine_id = None
     
     try:
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
             
-            # Handle join message
             if msg_type == "join":
                 player_id = data["playerId"]
+                machine_id = data.get("machineId", "")
+                
+                if room.machine_already_connected(machine_id):
+                    await websocket.close(code=1008, reason="Only one player per machine allowed")
+                    return
+                
+                if len(room.connections) >= players:
+                    await websocket.close(code=1008, reason="room is full")
+                    return
+                
                 player_data = {
                     "playerId": player_id,
                     "name": data["name"],
+                    "machineId": machine_id,
                     "guessedIds": data.get("guessedIds", []),
                     "gridState": data.get("gridState", [])
                 }
                 
-                # Add player to room
                 room.add_player(websocket, player_data)
-                print(f"👤 {data['name']} joined room {room_id}")
+                print(f"👤 {data['name']} joined room {room_id} (machine: {machine_id})")
                 
-                # Send current players list to the new player
                 await websocket.send_json({
                     "type": "players_update",
                     "players": room.get_all_players()
                 })
                 
-                # Notify all other players about new player
                 for conn in room.connections:
                     if conn != websocket:
                         try:
@@ -111,14 +122,11 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                     "ready": room.players_ready
                 })
             
-            # Handle game update (guesses, grid state)
             elif msg_type == "player_update":
-                # Update player data
                 if websocket in room.connections:
                     room.connections[websocket]["guessedIds"] = data.get("guessedIds", [])
                     room.connections[websocket]["gridState"] = data.get("gridState", [])
                 
-                # Broadcast to all other players
                 for conn in room.connections:
                     if conn != websocket:
                         try:
@@ -131,6 +139,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                             })
                         except:
                             pass
+            
             elif msg_type == "get_ready_players":
                 await websocket.send_json({
                     "type": "ready_update",
@@ -148,8 +157,6 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                         })
                         print('sent ready update')
 
-
-            # Handle chat message
             elif msg_type == "message":
                 sender_name = room.get_player_name(websocket)
                 message_text = data.get("message", "")
@@ -157,7 +164,6 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                 if message_text:
                     print(f"💬 {sender_name}: {message_text}")
                     
-                    # Broadcast chat message to all players in room
                     for conn in room.connections:
                         try:
                             await conn.send_json({
@@ -169,7 +175,6 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                         except:
                             pass
             
-            # Handle game completion
             elif msg_type == "game_complete":
                 winner_name = room.get_player_name(websocket)
                 
@@ -186,10 +191,8 @@ async def game_websocket(websocket: WebSocket, room_id: str):
         print(f"❌ Player {player_id} disconnected from room {room_id}")
         
         if room_id in rooms:
-            # Remove player
             room.remove_player(websocket)
             
-            # Notify others
             for conn in room.connections:
                 try:
                     await conn.send_json({
@@ -199,6 +202,5 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                 except:
                     pass
             
-            # Remove room if empty
             if not room.connections:
                 del rooms[room_id]

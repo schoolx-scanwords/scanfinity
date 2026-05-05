@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
   GUESSES: (roomId: string, playerId: string) => `game_progress_${roomId}_${playerId}_guesses`,
   GRID: (roomId: string, playerId: string) => `game_progress_${roomId}_${playerId}_grid`,
   OPPONENTS: (roomId: string) => `game_opponents_${roomId}`,
+  ACTIVE_TAB: (roomId: string) => `game_active_tab_${roomId}`,
 };
 
 const getMaxPlayersFromRoomId = (roomId: string): number => {
@@ -29,6 +30,42 @@ const getMaxPlayersFromRoomId = (roomId: string): number => {
     return parseInt(match[1], 10);
   }
   return 2;
+};
+
+const getMachineId = (): string => {
+  if (typeof window === 'undefined') return '';
+  
+  let machineId = localStorage.getItem('game_machine_id');
+  if (!machineId) {
+    machineId = `machine_${Math.random().toString(36).substr(2, 10)}_${Date.now()}`;
+    localStorage.setItem('game_machine_id', machineId);
+  }
+  return machineId;
+};
+
+const checkAndAcquireTabLock = (roomId: string): boolean => {
+  if (typeof window === 'undefined') return true;
+  
+  const machineId = getMachineId();
+  const lockKey = STORAGE_KEYS.ACTIVE_TAB(roomId);
+  const currentLock = localStorage.getItem(lockKey);
+  
+  if (currentLock && currentLock !== machineId) {
+    return false;
+  }
+  
+  localStorage.setItem(lockKey, machineId);
+  
+  const handleBeforeUnload = () => {
+    const currentLockValue = localStorage.getItem(lockKey);
+    if (currentLockValue === machineId) {
+      localStorage.removeItem(lockKey);
+    }
+  };
+  
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  
+  return true;
 };
 
 export default function GamePage() {
@@ -45,11 +82,13 @@ export default function GamePage() {
   
   const [myId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    let id = sessionStorage.getItem('game_player_id');
+    const machineId = getMachineId();
+    let id = localStorage.getItem(`player_id_${machineId}`);
     if (!id) {
       id = `player_${Math.random().toString(36).substr(2, 6)}`;
-      sessionStorage.setItem('game_player_id', id);
+      localStorage.setItem(`player_id_${machineId}`, id);
     }
+    sessionStorage.setItem('game_player_id', id);
     return id;
   });
   
@@ -67,6 +106,7 @@ export default function GamePage() {
   const [myGridStateArray, setMyGridStateArray] = useState<[string, string][]>([]);
   const [players, setPlayers] = useState<Map<string, Player>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
+  const redirectExecutedRef = useRef(false);
 
   const myGridStateMap = new Map(myGridStateArray);
 
@@ -76,13 +116,13 @@ export default function GamePage() {
 
   useEffect(() => {
     setMaxPlayers(getMaxPlayersFromRoomId(roomId))
-  }, [maxPlayers, roomId])
+  }, [roomId])
 
   useEffect(() => {
     if (currentPlayers === maxPlayers) {
       setGameInProgress(true)
     }
-  })
+  }, [currentPlayers, maxPlayers])
 
   const toggleReady = () => {
     if (!isReady) {
@@ -120,6 +160,17 @@ export default function GamePage() {
     setRoomId(roomParam);
     localStorage.setItem('last_room', roomParam);
   }, [isClient]);
+
+  useEffect(() => {
+    if (!roomId || !isClient || redirectExecutedRef.current) return;
+    
+    const hasLock = checkAndAcquireTabLock(roomId);
+    if (!hasLock) {
+      redirectExecutedRef.current = true;
+      router.push('/');
+      return;
+    }
+  }, [roomId, isClient, router]);
 
   useEffect(() => {
     if (!roomId || !isClient || !myId) return;
@@ -165,7 +216,6 @@ export default function GamePage() {
     localStorage.setItem(STORAGE_KEYS.OPPONENTS(roomId), JSON.stringify(opponentsArray));
   }, [players, roomId, isClient]);
 
-  // Single WebSocket connection
   useEffect(() => {
     if (!roomId) return;
     
@@ -178,12 +228,12 @@ export default function GamePage() {
       websocket.send(JSON.stringify({
         type: 'join',
         playerId: myId,
+        machineId: getMachineId(),
         name: myName,
         guessedIds: myGuessedIds,
         gridState: myGridStateArray,
         requestChatHistory: true 
       }));
-
     }
     
     websocket.onmessage = (event) => {
@@ -193,8 +243,6 @@ export default function GamePage() {
         setCurrentPlayers(data.ready)
       }
 
-
-      // Game updates
       if (data.type === 'players_update') {
         const newPlayers = new Map();
         data.players.forEach((player: any) => {
@@ -249,7 +297,6 @@ export default function GamePage() {
         });
       }
       
-      // Chat messages - forward to chat component via window event or context
       if (data.type === 'chat_message') {
         window.dispatchEvent(new CustomEvent('chat-message', { detail: data }));
       }
@@ -272,19 +319,14 @@ export default function GamePage() {
     websocket.onclose = () => {
       console.log('🔌 WebSocket disconnected');
       setIsConnected(false);
-      if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({
-          type: 'ready_update',
-          increment: -1
-        }));
-      }
-    //  router.push('/')
     };
     
     wsRef.current = websocket;
     
     return () => {
-      websocket.close();
+      if (websocket.readyState === WebSocket.OPEN) {
+        websocket.close();
+      }
     };
   }, [roomId, myId, myName]);
 
@@ -388,19 +430,10 @@ export default function GamePage() {
   const totalWords = wordCoords.length;
   const otherPlayers = Array.from(players.values()).filter(p => p.id !== myId);
 
-  console.log('Debug:', {
-  currentPlayers,
-  maxPlayers,
-  gameInProgress,
-  shouldShow: currentPlayers < maxPlayers && !gameInProgress
-  });
-
   return (
     <>
-      {/* Main content */}
       <main className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] p-6">
         <div className="max-w-full mx-auto">
-          {/* Connection Status */}
           <div className="mb-6 flex justify-center">
             {isConnected ? (
               <div className="bg-green-500/20 text-green-200 px-4 py-2 rounded-lg text-sm">
@@ -413,9 +446,7 @@ export default function GamePage() {
             )}
           </div>
 
-          {/* 3-column layout */}
           <div className="flex flex-col lg:flex-row gap-6 justify-center items-start">
-            {/* LEFT - Chat - receives sendMessage function */}
             <div className="lg:w-80 flex-shrink-0">
               <Chat 
                 sendMessage={sendChatMessage}
@@ -425,7 +456,6 @@ export default function GamePage() {
               />
             </div>
             
-            {/* MIDDLE - Game */}
             <div className="flex-shrink-0">
               <CrosswordPuzzle 
                 puzzleData={{ grid, words, wordCoords, puzzleId }}
@@ -437,14 +467,12 @@ export default function GamePage() {
               />
             </div>
             
-            {/* RIGHT - Opponents */}
             <div className="lg:w-80 flex-shrink-0">
               <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl">
                 <h2 className="text-white text-lg font-semibold mb-4 pb-2 border-b border-white/20">
                   Opponents
                 </h2>
                 
-                {/* You */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-white font-medium">You</span>
@@ -460,7 +488,6 @@ export default function GamePage() {
                   />
                 </div>
 
-                {/* Other Players */}
                 {otherPlayers.map((player) => (
                   <div key={player.id} className="mb-4">
                     <div className="flex items-center justify-between mb-2">
@@ -492,7 +519,6 @@ export default function GamePage() {
         </div>
       </main>
 
-      
       {(currentPlayers < maxPlayers && !gameInProgress) && (<Ready
         max_players={maxPlayers}
         current_players={currentPlayers}

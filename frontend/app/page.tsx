@@ -1,82 +1,418 @@
-import Link from 'next/link';
+'use client';
 
-export default function HomePage() {
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useAuth } from './contexts/auth_context';
+import { useLanguage } from './contexts/LanguageContext';
+import { COLORS, BUTTON_STYLES, TEXT_STYLES, LAYOUT_STYLES } from '@/app/styles/theme';
+import Button from './components/ui/Button';
+import Input from './components/ui/Input';
+import Card from './components/ui/Card';
+import LanguageSwitcher from './components/LanguageSwitcher';
+
+type ActivePlack = 'authenticated' | 'anonymous' | null;
+type AuthState = 'login' | 'register' | 'profile';
+
+const getButtonClass = (isActive: boolean, isAuthenticated: boolean) => {
+  const baseClass = `absolute font-bold text-xs sm:text-sm md:text-base uppercase tracking-wider transition-all z-50 hover:scale-105 whitespace-nowrap`;
+  const activeClass = isActive ? COLORS.buttonActive : `${COLORS.buttonInactive} ${COLORS.textHover}`;
+  return `${baseClass} ${activeClass}`;
+};
+
+export default function UnifiedAuthScreen() {
+  const router = useRouter();
+  const { user: authUser, login, logout } = useAuth();
+  const { t } = useLanguage();
+  const [activePlack, setActivePlack] = useState<ActivePlack>('authenticated');
+  const [authState, setAuthState] = useState<AuthState>('login');
+  const [rightColumnHeight, setRightColumnHeight] = useState(0);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+  
+  // Login state
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  
+  // Register state
+  const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [regSuccess, setRegSuccess] = useState<string | null>(null);
+  const [showRegister, setShowRegister] = useState(false);
+
+  // Error highlight states
+  const [loginUsernameError, setLoginUsernameError] = useState(false);
+  const [loginPasswordError, setLoginPasswordError] = useState(false);
+  const [regUsernameError, setRegUsernameError] = useState(false);
+  const [regEmailError, setRegEmailError] = useState(false);
+  const [regPasswordError, setRegPasswordError] = useState(false);
+
+  useEffect(() => {
+    if (authUser) {
+      setAuthState('profile');
+    }
+  }, [authUser]);
+
+  const highlightInput = (setErrorState: (value: boolean) => void) => {
+    setErrorState(true);
+    setTimeout(() => {
+      setErrorState(false);
+    }, 1000);
+  };
+
+  useEffect(() => {
+    const updateHeight = () => {
+      if (rightColumnRef.current) {
+        setRightColumnHeight(rightColumnRef.current.clientHeight);
+      }
+    };
+    
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    setTimeout(updateHeight, 100);
+    
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || t('authError'));
+      }
+
+      const data = await res.json();
+      
+      login({
+        username: data.user.username || loginUsername,
+        email: data.user.email || '',
+      }, data.access_token);
+      
+      setAuthState('profile');
+      
+    } catch (err: any) {
+      setLoginError(err.message || t('invalidCredentials'));
+      highlightInput(setLoginUsernameError);
+      highlightInput(setLoginPasswordError);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+    setRegSuccess(null);
+    setRegLoading(true);
+
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: regUsername, email: regEmail, password: regPassword }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || t('registerError'));
+      }
+
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: regUsername, password: regPassword }),
+      });
+
+      if (loginRes.ok) {
+        const loginData = await loginRes.json();
+        login({
+          username: regUsername,
+          email: regEmail,
+        }, loginData.access_token);
+        setAuthState('profile');
+        setRegSuccess(t('registerSuccess'));
+      } else {
+        throw new Error('Auto-login failed');
+      }
+      
+    } catch (err: any) {
+      setRegError(err.message || t('registerError'));
+      highlightInput(setRegUsernameError);
+      highlightInput(setRegEmailError);
+      highlightInput(setRegPasswordError);
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleAnonymousPlay = () => {
+    localStorage.setItem('auth_token', 'anonymous');
+    localStorage.setItem('auth_user', JSON.stringify({ username: 'Anonymous', isAnonymous: true }));
+    router.push('/lobby');
+  };
+
+  const handleProfile = () => {
+    console.log('Profile clicked');
+  };
+
+  const handlePlay = () => {
+    router.push('/lobby');
+  };
+
+  const handleLeaders = () => {
+    console.log('Leaders clicked');
+  };
+
+  const handleLogout = () => {
+    logout();
+    setAuthState('login');
+    setLoginUsername('');
+    setLoginPassword('');
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full text-center">
-        {/* Animated title */}
-        <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold mb-6 animate-fade-in">
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#f6d5f7] to-[#fbe9d7]">
-            Crossword
-          </span>
-          <br />
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#fbe9d7] to-[#f6d5f7]">
-            Challenge
-          </span>
-        </h1>
-
-        {/* Description */}
-        <p className="text-xl text-white/80 mb-12 max-w-lg mx-auto">
-          Test your vocabulary and solve engaging crossword puzzles. 
-          Click below to start your journey!
-        </p>
-
-        {/* Play button - redirects to login page */}
-        <Link href="/login">
-          <button className="group relative px-8 py-4 bg-white rounded-full text-xl font-bold text-[#667eea] overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl">
-            {/* Animated background effect */}
-            <span className="absolute inset-0 bg-gradient-to-r from-[#f6d5f7] to-[#fbe9d7] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-            
-            {/* Button content */}
-            <span className="relative flex items-center gap-3">
-              <svg 
-                className="w-6 h-6" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
+    <div className={LAYOUT_STYLES.container}>
+      <LanguageSwitcher />
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col lg:flex-row items-center justify-center min-h-screen gap-8">
+          
+          {/* Left side - GIF */}
+          <div className="lg:w-1/3 flex justify-center">
+            {rightColumnHeight > 0 && (
+              <div 
+                className="relative"
+                style={{ width: `${rightColumnHeight}px`, height: `${rightColumnHeight}px` }}
               >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" 
+                <Image
+                  src="/question.gif"
+                  alt="question"
+                  fill
+                  className="object-contain"
+                  unoptimized 
                 />
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-                />
-              </svg>
-              Play Now
-              <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
-            </span>
-          </button>
-        </Link>
+              </div>
+            )}
+          </div>
 
-        {/* Optional: Stats or features section */}
-        <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 text-white/80">
-          <div className="p-4 backdrop-blur-sm bg-white/10 rounded-xl">
-            <div className="text-2xl mb-2">🎯</div>
-            <div className="font-semibold">Multiple Puzzles</div>
-            <div className="text-sm">Different challenges await</div>
-          </div>
-          <div className="p-4 backdrop-blur-sm bg-white/10 rounded-xl">
-            <div className="text-2xl mb-2">⚡</div>
-            <div className="font-semibold">Real-time Feedback</div>
-            <div className="text-sm">Instant validation</div>
-          </div>
-          <div className="p-4 backdrop-blur-sm bg-white/10 rounded-xl">
-            <div className="text-2xl mb-2">🏆</div>
-            <div className="font-semibold">Track Progress</div>
-            <div className="text-sm">See your correct answers</div>
+          {/* Right side - Content */}
+          <div ref={rightColumnRef} className="lg:w-2/4 flex flex-col items-start">
+            
+            {/* Logo */}
+            <div className="relative h-32 w-full max-w-md mb-6 self-start">
+              <Image
+                src="/logo_left.svg"
+                alt="Icon"
+                fill
+                className="object-contain object-left"
+              />
+            </div>
+
+            {/* Container with placks */}
+            <div className="relative w-full max-w-[580px]">
+              
+              {/* SVGs */}
+              <div className="relative">
+                <div className={`transition-opacity duration-500 ${activePlack === 'authenticated' ? COLORS.activeOpacity : COLORS.inactiveOpacity}`}>
+                  <img src="/homepage_plack.svg" alt="Authenticated Plack" className="w-full h-auto" />
+                </div>
+                
+                <div className={`absolute inset-0 transition-opacity duration-500 ${activePlack === 'anonymous' ? COLORS.activeOpacity : COLORS.inactiveOpacity}`}>
+                  <div className="transform scale-x-[-1] w-full h-full">
+                    <img src="/homepage_plack.svg" alt="Anonymous Plack" className="w-full h-auto" />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActivePlack(activePlack === 'authenticated' ? null : 'authenticated')}
+                  className={getButtonClass(activePlack === 'authenticated', true)}
+                  style={{ left: '4%', top: '6%' }}
+                >
+                  {t('authenticated')}
+                </button>
+
+                <button
+                  onClick={() => setActivePlack(activePlack === 'anonymous' ? null : 'anonymous')}
+                  className={getButtonClass(activePlack === 'anonymous', false)}
+                  style={{ right: '4%', top: '6%' }}
+                >
+                  {t('anonymous')}
+                </button>
+              </div>
+
+              {/* Authenticated Content */}
+              <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'authenticated' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                <div className="absolute inset-0 flex flex-col px-[12%] py-[15%]" style={{ paddingTop: '18%', paddingBottom: '15%' }}>
+                  
+                  {authState === 'profile' && authUser ? (
+                    <Card className="w-[calc(100%+40px)] -mx-5 p-3 sm:p-4 md:p-5 -mt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
+                          {authUser.avatar ? (
+                            <img src={authUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                          ) : (
+                            <svg className="w-12 h-12 sm:w-16 sm:h-16 text-white/60" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                            </svg>
+                          )}
+                        </div>
+
+                        <div className="flex-1">
+                          <h3 className={`${TEXT_STYLES.heading} text-base sm:text-lg md:text-2xl`}>
+                            {authUser.username}
+                          </h3>
+                          <p className={`${TEXT_STYLES.subheading} text-xs sm:text-base md:text-xl`}>
+                            {authUser.email}
+                          </p>
+                          <button
+                            onClick={handleLogout}
+                            className={BUTTON_STYLES.logout}
+                          >
+                            {t('logout')}
+                          </button>
+                        </div>
+                      </div>
+                    </Card>
+                  ) : (
+                    <>
+                      <h3 className={`${TEXT_STYLES.heading} text-sm sm:text-base md:text-lg text-center -mt-8 mb-2`}>
+                        {!showRegister ? t('login') : t('register')}
+                      </h3>
+                      
+                      <div className="w-full">
+                        {!showRegister ? (
+                          <form onSubmit={handleLogin} className="w-full space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowRegister(true)}
+                              className={`w-full ${BUTTON_STYLES.secondary}`}
+                            >
+                              {t('noAccount')}
+                            </button>
+                            <Input
+                              type="text"
+                              value={loginUsername}
+                              onChange={(e) => setLoginUsername(e.target.value)}
+                              placeholder={t('username')}
+                              error={loginUsernameError}
+                              variant="login"
+                            />
+                            <Input
+                              type="password"
+                              value={loginPassword}
+                              onChange={(e) => setLoginPassword(e.target.value)}
+                              placeholder={t('password')}
+                              error={loginPasswordError}
+                              variant="login"
+                            />
+                            <button
+                              type="submit"
+                              disabled={loginLoading}
+                              className={`w-full ${COLORS.textPrimary} hover:${COLORS.textHover} font-semibold transition-all text-sm py-2 ${loginLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {loginLoading ? t('loggingIn') : t('loginBtn')}
+                            </button>
+                          </form>
+                        ) : (
+                          <form onSubmit={handleRegister} className="w-full space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowRegister(false)}
+                              className={`${BUTTON_STYLES.secondary} text-left w-full`}
+                            >
+                              {t('backToLogin')}
+                            </button>
+                            <Input
+                              type="text"
+                              value={regUsername}
+                              onChange={(e) => setRegUsername(e.target.value)}
+                              placeholder={t('username')}
+                              error={regUsernameError}
+                              variant="register"
+                            />
+                            <Input
+                              type="email"
+                              value={regEmail}
+                              onChange={(e) => setRegEmail(e.target.value)}
+                              placeholder={t('email')}
+                              error={regEmailError}
+                              variant="register"
+                            />
+                            <Input
+                              type="password"
+                              value={regPassword}
+                              onChange={(e) => setRegPassword(e.target.value)}
+                              placeholder={t('password')}
+                              error={regPasswordError}
+                              variant="register"
+                            />
+                            {regSuccess && (
+                              <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>
+                                {regSuccess}
+                              </p>
+                            )}
+                            <button
+                              type="submit"
+                              disabled={regLoading}
+                              className={`w-full ${COLORS.textPrimary} hover:${COLORS.textHover} font-semibold transition-all text-sm py-2 ${regLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {regLoading ? t('registering') : t('registerBtn')}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Anonymous Content */}
+              <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'anonymous' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-[12%] py-[15%]" style={{ paddingTop: '28%', paddingBottom: '20%' }}>
+                  <div 
+                    onClick={handleAnonymousPlay}
+                    className="text-center space-y-2 cursor-pointer hover:scale-105 transition-transform w-full"
+                  >
+                    <div className="text-3xl sm:text-4xl">🎮</div>
+                    <h3 className={`${TEXT_STYLES.heading} text-sm`}>{t('playAnonymous')}</h3>
+                    <p className={`${TEXT_STYLES.subheading} text-[10px]`}>
+                      {t('clickToStart')}
+                    </p>
+                    <div className={`${COLORS.textTertiary} text-[8px]`}>
+                      {t('progressNotSaved')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Three Buttons */}
+            <div className="flex gap-3 w-full max-w-[580px] mt-4 relative z-50">
+              <Button onClick={handleProfile} className="flex-1 py-2 text-xs sm:text-sm">
+                {t('profileBtn')}
+              </Button>
+              <Button onClick={handlePlay} className="flex-1 py-2 text-xs sm:text-sm">
+                {t('play')}
+              </Button>
+              <Button onClick={handleLeaders} className="flex-1 py-2 text-xs sm:text-sm">
+                {t('leaders')}
+              </Button>
+            </div>
           </div>
         </div>
-
-        {/* Optional: Footer note */}
-        <p className="mt-12 text-white/50 text-sm">
-          Click the button above to start playing
-        </p>
       </div>
     </div>
   );
