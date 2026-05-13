@@ -46,6 +46,12 @@ export const translations = {
     // Plack toggles
     authenticated: 'авторизваться',
     anonymous: 'играть как гость',
+
+    // Game auth page
+    gameAccess: 'Доступ к игре',
+    or: 'или',
+    continueAsGuest: 'Продолжить как гость',
+    guestNote: 'Как гость ваш прогресс не будет сохранен',
   },
   en: {
     // Auth states
@@ -90,6 +96,12 @@ export const translations = {
     // Plack toggles
     authenticated: 'authenticated',
     anonymous: 'anonymous',
+
+    // Game auth page
+    gameAccess: 'Game Access',
+    or: 'or',
+    continueAsGuest: 'Continue as Guest',
+    guestNote: 'Your progress will not be saved as a guest',
   },
 };
 
