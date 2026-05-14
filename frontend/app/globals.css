@@ -2,16 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< HEAD
-:root {
-  --background: #130237;
-  --panel: #754ca8;
-  --panel-dark: #5f3d8a;
-  --accent: #00afff;
-
-  --text: #ffffff;
-  --text-muted: rgba(255, 255, 255, 0.7);
-=======
 /* app/globals.css - Add these animations */
 @keyframes fade-in {
   from {
@@ -52,7 +42,6 @@
 
 .duration-500 {
   animation-duration: 500ms;
->>>>>>> remotes/origin/game
 }
 
 /* Fix autofill styling - match your exact input styling */
