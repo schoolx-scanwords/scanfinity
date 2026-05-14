@@ -94,7 +94,7 @@ def insert_puzzle_sync(puzzle_obj):
     cur.execute(
         """
         INSERT INTO "Puzzles" 
-        (puzzle_id, lang, topic, difficulty, size, times_played, jsonb) 
+        (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
         (
@@ -133,11 +133,11 @@ if __name__ == "__main__":
     pzl_obj = PZL(
         puzzle_id=jsonpzl["id"],
         lang="ru",
-        topic="no_topic",
+        topic_id="1",
         difficulty="medium",
         size=len(jsonpzl["grid"]),
         times_played=0,
-        jsonb=jsonpzl
+        json=jsonpzl
     )
     
     insert_puzzle_sync(pzl_obj)
