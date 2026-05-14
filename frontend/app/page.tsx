@@ -31,9 +31,13 @@ export default function UnifiedAuthScreen() {
   
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginNeedsVerification, setLoginNeedsVerification] = useState(false);
+  const [loginResendLoading, setLoginResendLoading] = useState(false);
+  const [loginResendMessage, setLoginResendMessage] = useState<string | null>(null);
   
   // Register state
   const [regUsername, setRegUsername] = useState('');
@@ -43,6 +47,8 @@ export default function UnifiedAuthScreen() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
+  const [regPendingEmail, setRegPendingEmail] = useState<string | null>(null);
+  const [regResendLoading, setRegResendLoading] = useState(false);
 
   // Error highlight states
   const [loginUsernameError, setLoginUsernameError] = useState(false);
@@ -81,6 +87,8 @@ export default function UnifiedAuthScreen() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+    setLoginNeedsVerification(false);
+    setLoginResendMessage(null);
     setLoginLoading(true);
 
     try {
@@ -92,7 +100,11 @@ export default function UnifiedAuthScreen() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || t('authError'));
+        const detail = data.detail || t('authError');
+        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
+          setLoginNeedsVerification(true);
+        }
+        throw new Error(detail);
       }
 
       const data = await res.json();
@@ -113,11 +125,37 @@ export default function UnifiedAuthScreen() {
     }
   };
 
+  const handleLoginResend = async () => {
+    setLoginResendMessage(null);
+    setLoginError(null);
+    setLoginResendLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось отправить письмо');
+      }
+
+      setLoginResendMessage('Если аккаунт существует, письмо отправлено.');
+    } catch (err: any) {
+      setLoginError(err.message || 'Не удалось отправить письмо');
+    } finally {
+      setLoginResendLoading(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError(null);
     setRegSuccess(null);
     setRegLoading(true);
+    setRegPendingEmail(null);
 
     try {
       const res = await fetch('/api/users', {
@@ -131,23 +169,9 @@ export default function UnifiedAuthScreen() {
         throw new Error(data.detail || t('registerError'));
       }
 
-      const loginRes = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: regUsername, password: regPassword }),
-      });
-
-      if (loginRes.ok) {
-        const loginData = await loginRes.json();
-        login({
-          username: regUsername,
-          email: regEmail,
-        }, loginData.access_token);
-        setAuthState('profile');
-        setRegSuccess(t('registerSuccess'));
-      } else {
-        throw new Error('Auto-login failed');
-      }
+      setRegPendingEmail(regEmail);
+      setRegSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
+      setShowRegister(false);
       
     } catch (err: any) {
       setRegError(err.message || t('registerError'));
@@ -159,6 +183,31 @@ export default function UnifiedAuthScreen() {
     }
   };
 
+  const handleRegisterResend = async () => {
+    if (!regPendingEmail) return;
+    setRegResendLoading(true);
+    setRegError(null);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regPendingEmail }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось отправить письмо');
+      }
+
+      setRegSuccess('Если аккаунт существует, письмо отправлено повторно.');
+    } catch (err: any) {
+      setRegError(err.message || 'Не удалось отправить письмо');
+    } finally {
+      setRegResendLoading(false);
+    }
+  };
+
   const handleAnonymousPlay = () => {
     localStorage.setItem('auth_token', 'anonymous');
     localStorage.setItem('auth_user', JSON.stringify({ username: 'Anonymous', isAnonymous: true }));
@@ -166,7 +215,7 @@ export default function UnifiedAuthScreen() {
   };
 
   const handleProfile = () => {
-    console.log('Profile clicked');
+    router.push('/profile');
   };
 
   const handlePlay = () => {
@@ -318,6 +367,34 @@ export default function UnifiedAuthScreen() {
                               error={loginPasswordError}
                               variant="login"
                             />
+                            {loginNeedsVerification && (
+                              <div className="space-y-2">
+                                <p className={`text-[10px] ${COLORS.textSecondary}`}>
+                                  Похоже, почта не подтверждена. Введите email, чтобы отправить письмо ещё раз.
+                                </p>
+                                <Input
+                                  type="email"
+                                  value={loginEmail}
+                                  onChange={(e) => setLoginEmail(e.target.value)}
+                                  placeholder={t('email')}
+                                  variant="login"
+                                  required={false}
+                                />
+                                {loginResendMessage && (
+                                  <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>
+                                    {loginResendMessage}
+                                  </p>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={handleLoginResend}
+                                  disabled={loginResendLoading || !loginEmail}
+                                  className={`w-full ${COLORS.textPrimary} hover:${COLORS.textHover} font-semibold transition-all text-[10px] py-1 ${loginResendLoading || !loginEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  {loginResendLoading ? 'Отправляем…' : 'Отправить письмо ещё раз'}
+                                </button>
+                              </div>
+                            )}
                             <button
                               type="submit"
                               disabled={loginLoading}
@@ -363,6 +440,16 @@ export default function UnifiedAuthScreen() {
                               <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>
                                 {regSuccess}
                               </p>
+                            )}
+                            {regPendingEmail && (
+                              <button
+                                type="button"
+                                onClick={handleRegisterResend}
+                                disabled={regResendLoading}
+                                className={`w-full ${COLORS.textPrimary} hover:${COLORS.textHover} font-semibold transition-all text-[10px] py-1 ${regResendLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                {regResendLoading ? 'Отправляем…' : 'Отправить письмо ещё раз'}
+                              </button>
                             )}
                             <button
                               type="submit"

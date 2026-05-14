@@ -2,21 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../contexts/auth_context';
 
 export default function RegisterPage() {
   const router = useRouter();
+  useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     setLoading(true);
+    setPendingEmail(null);
 
     try {
       const res = await fetch('/api/users', {
@@ -32,15 +37,39 @@ export default function RegisterPage() {
         throw new Error(data.detail || 'Ошибка регистрации');
       }
 
-      setSuccess('Регистрация прошла успешно! Теперь вы можете войти.');
-      // Небольшая задержка и переход на логин
-      setTimeout(() => {
-        router.push('/login');
-      }, 1500);
+      setPendingEmail(email);
+      setSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
     } catch (err: any) {
       setError(err.message || 'Не удалось выполнить регистрацию');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    setResendLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось отправить письмо');
+      }
+
+      setSuccess('Если аккаунт существует, письмо отправлено повторно.');
+    } catch (err: any) {
+      setError(err.message || 'Не удалось отправить письмо');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -107,6 +136,27 @@ export default function RegisterPage() {
             <p className="text-sm text-emerald-200 bg-emerald-500/20 border border-emerald-400/40 rounded-xl px-4 py-2">
               {success}
             </p>
+          )}
+
+          {pendingEmail && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="w-full px-6 py-3 bg-white/20 rounded-full text-sm font-semibold text-white transition-all duration-300 hover:bg-white/30 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {resendLoading ? 'Отправляем...' : 'Отправить письмо ещё раз'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/login')}
+                className="w-full px-6 py-3 bg-white rounded-full text-sm font-semibold text-[#667eea] transition-all duration-300 hover:scale-[1.01]"
+              >
+                Перейти ко входу
+              </button>
+            </div>
           )}
 
           <button

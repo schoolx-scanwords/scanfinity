@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #130237;
+  --panel: #754ca8;
+  --panel-dark: #5f3d8a;
+  --accent: #00afff;
+
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.7);
+}
+
 /* Fix autofill styling - match your exact input styling */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -24,6 +34,28 @@ input:autofill:active {
 
 html, body {
   min-height: 100vh;
-  background: linear-gradient(to bottom, #460045, #130237);
+  background: linear-gradient(to bottom, #460045, var(--background));
   background-attachment: fixed;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 28, 97, 0.85) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(58, 28, 97, 0.85);
+  border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(46, 20, 84, 0.95);
 }

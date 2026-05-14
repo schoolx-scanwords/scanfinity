@@ -74,7 +74,7 @@ class Puzzle():
 
 def insert_puzzle_sync(puzzle_obj):
     HOST = "localhost"
-    PORT = 5432
+    PORT = int(os.getenv("POSTGRES_PORT", "5432"))
     DB = os.getenv("POSTGRES_DB")
     USER = os.getenv("POSTGRES_USER")
     PASSWORD = os.getenv("POSTGRES_PASSWORD")

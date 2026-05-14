@@ -6,13 +6,15 @@ from .dto import (
     UserOutDTO,
     TokenDTO,
     TokenWithUserDTO,
+    VerifyEmailDTO,
+    ResendVerificationDTO,
 )
 
 
 __all__ = [
     "Puzzle",
     "WordGuess",
-    "PuzzleGuess"
+    "PuzzleGuess",
     "Guess",
     "Base",
     "User",
@@ -20,5 +22,7 @@ __all__ = [
     "UserLoginDTO",
     "UserOutDTO",
     "TokenDTO",
-    "TokenWithUserDTO"
+    "TokenWithUserDTO",
+    "VerifyEmailDTO",
+    "ResendVerificationDTO",
 ]

@@ -55,8 +55,8 @@ async def login(login_data: UserLoginDTO):
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT id, username, email, password_hash, password_salt, created_at FROM "Users" WHERE username = %s',
-                [login_data.username]
+                "SELECT id, username, email, password_hash, password_salt, created_at, is_active FROM users WHERE username = %s",
+                (login_data.username,),
             )
             row = await cur.fetchone()
             
@@ -72,7 +72,8 @@ async def login(login_data: UserLoginDTO):
                 "email": row[2],
                 "password_hash": row[3],
                 "password_salt": row[4],
-                "created_at": row[5]
+                "created_at": row[5],
+                "is_active": row[6],
             }
             
             is_password_valid = verify_password(
@@ -83,6 +84,12 @@ async def login(login_data: UserLoginDTO):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid username or password",
+                )
+
+            if not user_dict.get("is_active"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Email is not verified",
                 )
             
             del user_dict["password_hash"]

@@ -1,10 +1,16 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from datetime import datetime
 import hashlib
 import os
 
 from models import UserCreateDTO, UserOutDTO
 from database.connect import connect
+from services.email_sender import send_email_safe
+from services.email_verification import (
+    create_email_verification_token,
+    generate_raw_token,
+    token_expiry,
+)
 
 router = APIRouter()
 
@@ -20,56 +26,94 @@ def hash_password(password: str) -> tuple[str, str]:
 
 
 @router.post("/api/users", response_model=UserOutDTO, status_code=status.HTTP_201_CREATED)
-async def register_user(user_in: UserCreateDTO):
+async def register_user(user_in: UserCreateDTO, background_tasks: BackgroundTasks):
     pool = await connect()
     
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            # Явно вычисляем новый id, чтобы не зависеть от автоинкремента
-            await cur.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM "Users"')
-            row = await cur.fetchone()
-            new_id = row[0] if row else 1
-
             await cur.execute(
-                'SELECT * FROM "Users" WHERE email = %s',
-                [user_in.email]
+                "SELECT id, is_active FROM users WHERE email = %s",
+                (user_in.email,),
             )
-            existing_user = await cur.fetchone()
-            
-            if existing_user:
+            existing_by_email = await cur.fetchone()
+            if existing_by_email:
+                _, is_active = existing_by_email
+                if not is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Email already registered but not verified. Check your email or use /api/auth/resend-verification.",
+                    )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email already registered",
                 )
-            
-            password_hash, password_salt = hash_password(user_in.password)
-            
+
             await cur.execute(
-                """
-                INSERT INTO "Users" 
-                (id, username, email, created_at, password_hash, password_salt) 
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id, username, email, created_at
-                """,
-                (
-                    new_id,
-                    user_in.username,
-                    user_in.email,
-                    datetime.now(),
-                    password_hash,
-                    password_salt
-                )
+                "SELECT 1 FROM users WHERE username = %s",
+                (user_in.username,),
             )
-            
-            await conn.commit()
-            new_user = await cur.fetchone()
-            
-            if new_user:
-                columns = [desc[0] for desc in cur.description]
-                user_dict = dict(zip(columns, new_user))
-                return UserOutDTO(
-                    id=user_dict['id'],
-                    username=user_dict['username'],
-                    email=user_dict['email'],
-                    created_at=user_dict['created_at']
+            if await cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Username already taken",
                 )
+
+        password_hash, password_salt = hash_password(user_in.password)
+        raw_token = generate_raw_token()
+        expires_at = token_expiry(minutes=20)
+
+        async with conn.transaction():
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO users
+                    (username, email, created_at, password_hash, password_salt, is_active)
+                    VALUES (%s, %s, %s, %s, %s, false)
+                    RETURNING id, username, email, created_at, is_active
+                    """,
+                    (
+                        user_in.username,
+                        user_in.email,
+                        datetime.now(),
+                        password_hash,
+                        password_salt,
+                    ),
+                )
+                new_user = await cur.fetchone()
+
+            if not new_user:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create user",
+                )
+
+            user_id = int(new_user[0])
+            await create_email_verification_token(
+                conn=conn,
+                user_id=user_id,
+                raw_token=raw_token,
+                expires_at=expires_at,
+            )
+
+        verify_base = os.getenv("EMAIL_VERIFY_BASE_URL", "http://localhost:8000").rstrip("/")
+        verify_url = f"{verify_base}/verify-email/?token={raw_token}"
+
+        background_tasks.add_task(
+            send_email_safe,
+            to_email=user_in.email,
+            subject="Подтверждение почты",
+            body_text=(
+                "Подтверждение почты\n\n"
+                "Чтобы завершить регистрацию, откройте ссылку:\n"
+                f"{verify_url}\n\n"
+                "Если вы не регистрировались — просто игнорируйте это письмо.\n"
+            ),
+        )
+
+        return UserOutDTO(
+            id=int(new_user[0]),
+            username=new_user[1],
+            email=new_user[2],
+            created_at=new_user[3],
+            is_active=bool(new_user[4]),
+        )

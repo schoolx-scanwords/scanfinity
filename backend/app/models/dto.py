@@ -17,6 +17,7 @@ class UserOutDTO(BaseModel):
     username: str
     email: EmailStr
     created_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -32,3 +33,11 @@ class TokenWithUserDTO(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VerifyEmailDTO(BaseModel):
+    token: str
+
+
+class ResendVerificationDTO(BaseModel):
+    email: EmailStr

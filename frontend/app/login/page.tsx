@@ -2,17 +2,25 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../contexts/auth_context';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
+    setResendMessage(null);
     setLoading(true);
 
     try {
@@ -26,21 +34,54 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Ошибка авторизации');
+        const detail = data.detail || 'Ошибка авторизации';
+        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
+          setNeedsVerification(true);
+        }
+        throw new Error(detail);
       }
 
       const data = await res.json();
-      // Сохраняем токен и пользователя в localStorage для последующего использования
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', data.access_token);
-        localStorage.setItem('auth_user', JSON.stringify(data.user));
-      }
+      login(
+        {
+          username: data.user?.username || username,
+          email: data.user?.email || '',
+        },
+        data.access_token
+      );
 
       router.push('/lobby');
     } catch (err: any) {
       setError(err.message || 'Не удалось выполнить вход');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendMessage(null);
+    setError(null);
+    setResendLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось отправить письмо');
+      }
+
+      setResendMessage('Если аккаунт существует, письмо отправлено.');
+    } catch (err: any) {
+      setError(err.message || 'Не удалось отправить письмо');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -87,6 +128,43 @@ export default function LoginPage() {
             <p className="text-sm text-red-200 bg-red-500/20 border border-red-400/40 rounded-xl px-4 py-2">
               {error}
             </p>
+          )}
+
+          {needsVerification && (
+            <div className="space-y-3">
+              <p className="text-xs text-white/70">
+                Похоже, почта не подтверждена. Введите email, чтобы отправить письмо ещё раз.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/90 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#f6d5f7]"
+                  placeholder="Введите email"
+                  required
+                />
+              </div>
+
+              {resendMessage && (
+                <p className="text-xs text-emerald-200 bg-emerald-500/20 border border-emerald-400/40 rounded-xl px-4 py-2">
+                  {resendMessage}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading || !email}
+                className="w-full px-6 py-3 bg-white/20 rounded-full text-sm font-semibold text-white transition-all duration-300 hover:bg-white/30 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {resendLoading ? 'Отправляем...' : 'Отправить письмо ещё раз'}
+              </button>
+            </div>
           )}
 
           <button

@@ -7,7 +7,7 @@ load_dotenv()
 
 # Database configuration
 HOST = "localhost"
-PORT = 5432
+PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 DB = os.getenv("POSTGRES_DB")
 USER = os.getenv("POSTGRES_USER")
 PASSWORD = os.getenv("POSTGRES_PASSWORD")
@@ -23,6 +23,7 @@ async def connect():
     if pool is None:
         pool = AsyncConnectionPool(
             DATABASE_URL,
+            open=False,
             min_size=5,      # Minimum connections in the pool
             max_size=20,     # Maximum connections in the pool
             timeout=60,      # Connection timeout in seconds

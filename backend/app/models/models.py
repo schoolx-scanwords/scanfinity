@@ -6,16 +6,19 @@ from sqlalchemy import (
     String,
     DateTime,
     LargeBinary,
+    Boolean,
 )
 Base = declarative_base()
 
 class User(Base):
-    __tablename__ = "Users"
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True, index=True)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    is_active = Column(Boolean, nullable=False, server_default=text("false"))
+    email_verified_at = Column(DateTime, nullable=True)
     elo = Column(Integer, nullable=False, server_default=text("0"))
     total_games = Column(Integer, nullable=False, server_default=text("0"))
     product_image = Column(LargeBinary, nullable=True)
