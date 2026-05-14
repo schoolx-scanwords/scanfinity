@@ -1,9 +1,7 @@
-// app/game/components/opponent_view.tsx
 'use client';
 
 import React, { useState } from 'react';
 
-// Types matching your game
 interface Cell {
   item: string;
   symbol?: string;
@@ -19,7 +17,7 @@ interface Grid {
 
 interface WordCoords {
   id: number;
-  coords: number[][]; // [col, row] pairs
+  coords: number[][];
 }
 
 interface OpponentViewProps {
@@ -28,26 +26,19 @@ interface OpponentViewProps {
   guessedWordIds: number[];
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  isAfk?: boolean;
 }
-
-// Helper function
-const findWordsAtCoord = (words: WordCoords[], x: number, y: number) => {
-  return words.filter(word => 
-    word.coords.some(([cx, cy]) => cx === x && cy === y)
-  );
-};
 
 const OpponentView: React.FC<OpponentViewProps> = ({ 
   grid,
   wordCoords,
   guessedWordIds,
   className = '',
-  size = 'md'
+  size = 'md',
+  isAfk = false
 }) => {
-  // Create a Set of guessed cells for O(1) lookup
   const guessedCells = new Set<string>();
   
-  // Mark all cells of guessed words
   wordCoords.forEach(word => {
     if (guessedWordIds.includes(word.id)) {
       word.coords.forEach(([col, row]) => {
@@ -56,7 +47,6 @@ const OpponentView: React.FC<OpponentViewProps> = ({
     }
   });
 
-  // Determine cell size based on prop
   const getCellSizeClass = () => {
     switch(size) {
       case 'sm': return 'w-3 h-3 sm:w-4 sm:h-4';
@@ -73,90 +63,36 @@ const OpponentView: React.FC<OpponentViewProps> = ({
         {grid.lines.map((line, rowIndex) => (
           <div key={`row-${rowIndex}`} className="flex">
             {line.cells.map((cell, colIndex) => {
-              // Only render playable cells (where item is 'L')
               if (cell.item === 'L') {
                 const isGuessed = guessedCells.has(`${rowIndex},${colIndex}`);
+                
+                let cellColor = '';
+                if (isGuessed) {
+                  cellColor = isAfk ? 'bg-gray-400/60' : 'bg-green-400/80';
+                } else {
+                  cellColor = isAfk ? 'bg-gray-300/15' : 'bg-gray-300/30';
+                }
                 
                 return (
                   <div
                     key={`${rowIndex}-${colIndex}`}
-                    className={`
-                      ${cellSizeClass}
-                      ${isGuessed ? 'bg-green-400/80' : 'bg-gray-300/30'}
-                      rounded-sm
-                      transition-colors duration-200
-                    `}
-                    title={isGuessed ? 'Guessed' : 'Not guessed'}
+                    className={`${cellSizeClass} ${cellColor} rounded-sm transition-colors duration-200`}
+                    title={isAfk ? 'Player AFK' : (isGuessed ? 'Guessed' : 'Not guessed')}
                   />
                 );
               } else {
-                // Empty cell - maintains grid structure
-                return (
-                  <div
-                    key={`${rowIndex}-${colIndex}`}
-                    className={cellSizeClass}
-                  />
-                );
+                return <div key={`${rowIndex}-${colIndex}`} className={cellSizeClass} />;
               }
             })}
           </div>
         ))}
       </div>
       
-      {/* Optional: Word count badge */}
-      <div className="text-xs text-white/60 text-center mt-1">
-        {guessedWordIds.length}/{wordCoords.length} words
+      <div className="text-xs text-center mt-1">
+        <span className={isAfk ? 'text-gray-400' : 'text-white/60'}>
+          {guessedWordIds.length}/{wordCoords.length} words
+        </span>
       </div>
-    </div>
-  );
-};
-
-// Test component with proper typing
-export const OpponentViewTest: React.FC<{
-  grid: Grid;
-  wordCoords: WordCoords[];
-}> = ({ grid, wordCoords }) => {
-  // Properly typed state
-  const [guessedIds, setGuessedIds] = useState<number[]>([]);
-  
-  // Properly typed handler
-  const toggleWord = (wordId: number) => {
-    setGuessedIds((prev: number[]): number[] => {
-      if (prev.includes(wordId)) {
-        return prev.filter((id: number) => id !== wordId);
-      }
-      return [...prev, wordId];
-    });
-  };
-  
-  return (
-    <div className="p-5 bg-gradient-to-br from-[#667eea] to-[#764ba2] rounded-xl">
-      <h3 className="text-lg font-semibold mb-3 text-white">
-        Opponent Progress: {guessedIds.length}/{wordCoords.length} words
-      </h3>
-      
-      <div className="mb-4 flex flex-wrap gap-2">
-        {wordCoords.map(word => (
-          <button
-            key={word.id}
-            onClick={() => toggleWord(word.id)}
-            className={`px-2 py-1 text-xs rounded ${
-              guessedIds.includes(word.id) 
-                ? 'bg-green-500 text-white' 
-                : 'bg-white/20 text-white'
-            }`}
-          >
-            Word {word.id}
-          </button>
-        ))}
-      </div>
-      
-      <OpponentView 
-        grid={grid}
-        wordCoords={wordCoords}
-        guessedWordIds={guessedIds}
-        size="lg"
-      />
     </div>
   );
 };
