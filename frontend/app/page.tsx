@@ -20,6 +20,58 @@ const getButtonClass = (isActive: boolean, isAuthenticated: boolean) => {
   return `${baseClass} ${activeClass}`;
 };
 
+// Generate a unique guest ID
+const generateUniqueGuestId = (): string => {
+  const adjectives = [
+    'Happy', 'Sad', 'Sleepy', 'Angry', 'Excited', 'Calm', 'Brave', 'Clever', 
+    'Witty', 'Kind', 'Lucky', 'Mighty', 'Swift', 'Bold', 'Bright', 'Dark', 
+    'Fierce', 'Gentle', 'Jolly', 'Mystic', 'Noble', 'Quick', 'Royal', 'Smart',
+    'Wild', 'Zealous', 'Awesome', 'Cool', 'Epic', 'Funny', 'Great', 'Heroic'
+  ];
+  
+  const nouns = [
+    'Fox', 'Wolf', 'Eagle', 'Hawk', 'Lion', 'Tiger', 'Bear', 'Dragon', 
+    'Phoenix', 'Raven', 'Falcon', 'Owl', 'Shark', 'Dolphin', 'Panther', 
+    'Leopard', 'Cheetah', 'Horse', 'Deer', 'Rabbit', 'Squirrel', 'Otter',
+    'Panda', 'Koala', 'Kangaroo', 'Penguin', 'Duck', 'Swan', 'Crow', 'Hawk'
+  ];
+  
+  const numbers = Math.floor(Math.random() * 1000);
+  const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  
+  return `${randomAdjective}${randomNoun}${numbers}`;
+};
+
+// Store used guest IDs in localStorage to ensure uniqueness across sessions
+const getUsedGuestIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  const stored = localStorage.getItem('used_guest_ids');
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+};
+
+const saveUsedGuestId = (id: string) => {
+  if (typeof window === 'undefined') return;
+  const usedIds = getUsedGuestIds();
+  usedIds.add(id);
+  localStorage.setItem('used_guest_ids', JSON.stringify(Array.from(usedIds)));
+};
+
+// Guest user interface
+interface GuestUser {
+  username: string;
+  isAnonymous: boolean;
+  guestId: string;
+  avatar?: string;
+}
+
 export default function UnifiedAuthScreen() {
   const router = useRouter();
   const { user: authUser, login, logout } = useAuth();
@@ -28,6 +80,7 @@ export default function UnifiedAuthScreen() {
   const [authState, setAuthState] = useState<AuthState>('login');
   const [rightColumnHeight, setRightColumnHeight] = useState(0);
   const rightColumnRef = useRef<HTMLDivElement>(null);
+  const [guestUser, setGuestUser] = useState<GuestUser | null>(null);
   
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
@@ -51,9 +104,32 @@ export default function UnifiedAuthScreen() {
   const [regEmailError, setRegEmailError] = useState(false);
   const [regPasswordError, setRegPasswordError] = useState(false);
 
+  // Check for existing guest session on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const userStr = localStorage.getItem('auth_user');
+    if (token === 'anonymous' && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        if (userData.isAnonymous) {
+          setGuestUser({
+            username: userData.username,
+            isAnonymous: true,
+            guestId: userData.guestId || userData.username,
+            avatar: userData.avatar
+          });
+          setAuthState('profile');
+        }
+      } catch (e) {
+        console.error('Failed to parse guest user data', e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (authUser) {
       setAuthState('profile');
+      setGuestUser(null);
     }
   }, [authUser]);
 
@@ -103,6 +179,7 @@ export default function UnifiedAuthScreen() {
       }, data.access_token);
       
       setAuthState('profile');
+      setGuestUser(null);
       
     } catch (err: any) {
       setLoginError(err.message || t('invalidCredentials'));
@@ -144,6 +221,7 @@ export default function UnifiedAuthScreen() {
           email: regEmail,
         }, loginData.access_token);
         setAuthState('profile');
+        setGuestUser(null);
         setRegSuccess(t('registerSuccess'));
       } else {
         throw new Error('Auto-login failed');
@@ -160,9 +238,57 @@ export default function UnifiedAuthScreen() {
   };
 
   const handleAnonymousPlay = () => {
+    // Generate a unique guest ID
+    let uniqueId = generateUniqueGuestId();
+    const usedIds = getUsedGuestIds();
+    
+    // Ensure uniqueness by checking against used IDs
+    let attempts = 0;
+    while (usedIds.has(uniqueId) && attempts < 10) {
+      uniqueId = generateUniqueGuestId();
+      attempts++;
+    }
+    
+    // If still not unique after 10 attempts, add timestamp
+    if (usedIds.has(uniqueId)) {
+      uniqueId = `${uniqueId}_${Date.now()}`;
+    }
+    
+    // Save to used IDs
+    saveUsedGuestId(uniqueId);
+    
+    // Create guest user object
+    const guestUserData: GuestUser = {
+      username: uniqueId,
+      isAnonymous: true,
+      guestId: uniqueId,
+      avatar: undefined
+    };
+    
+    // Store guest info
     localStorage.setItem('auth_token', 'anonymous');
-    localStorage.setItem('auth_user', JSON.stringify({ username: 'Anonymous', isAnonymous: true }));
-    router.push('/lobby');
+    localStorage.setItem('auth_user', JSON.stringify(guestUserData));
+    
+    // Also store in session for current session tracking
+    sessionStorage.setItem('guest_id', uniqueId);
+    
+    // Set guest user state
+    setGuestUser(guestUserData);
+    setAuthState('profile');
+    
+    // Navigate to lobby after a short delay to show profile
+    setTimeout(() => {
+      router.push('/lobby');
+    }, 1500);
+  };
+
+  const handleGuestLogout = () => {
+    // Clear guest session
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    sessionStorage.removeItem('guest_id');
+    setGuestUser(null);
+    setAuthState('login');
   };
 
   const handleProfile = () => {
@@ -180,9 +306,13 @@ export default function UnifiedAuthScreen() {
   const handleLogout = () => {
     logout();
     setAuthState('login');
+    setGuestUser(null);
     setLoginUsername('');
     setLoginPassword('');
   };
+
+  // Determine which user to display in profile
+  const displayUser = authUser || guestUser;
 
   return (
     <div className={LAYOUT_STYLES.container}>
@@ -257,12 +387,12 @@ export default function UnifiedAuthScreen() {
               <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'authenticated' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                 <div className="absolute inset-0 flex flex-col px-[12%] py-[15%]" style={{ paddingTop: '18%', paddingBottom: '15%' }}>
                   
-                  {authState === 'profile' && authUser ? (
+                  {authState === 'profile' && displayUser ? (
                     <Card className="w-[calc(100%+40px)] -mx-5 p-3 sm:p-4 md:p-5 -mt-6">
                       <div className="flex items-center gap-3">
                         <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
-                          {authUser.avatar ? (
-                            <img src={authUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                          {displayUser.avatar ? (
+                            <img src={displayUser.avatar} alt="Profile" className="w-full h-full object-cover" />
                           ) : (
                             <svg className="w-12 h-12 sm:w-16 sm:h-16 text-white/60" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -272,16 +402,28 @@ export default function UnifiedAuthScreen() {
 
                         <div className="flex-1">
                           <h3 className={`${TEXT_STYLES.heading} text-base sm:text-lg md:text-2xl`}>
-                            {authUser.username}
+                            {displayUser.username}
+                            {guestUser && (
+                              <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-200 px-2 py-0.5 rounded">
+                                Guest
+                              </span>
+                            )}
                           </h3>
-                          <p className={`${TEXT_STYLES.subheading} text-xs sm:text-base md:text-xl`}>
-                            {authUser.email}
-                          </p>
+                          {!guestUser && authUser && (
+                            <p className={`${TEXT_STYLES.subheading} text-xs sm:text-base md:text-xl`}>
+                              {authUser.email}
+                            </p>
+                          )}
+                          {guestUser && (
+                            <p className={`${TEXT_STYLES.subheading} text-xs sm:text-base md:text-xl text-yellow-400/70`}>
+                              Guest Player
+                            </p>
+                          )}
                           <button
-                            onClick={handleLogout}
+                            onClick={guestUser ? handleGuestLogout : handleLogout}
                             className={BUTTON_STYLES.logout}
                           >
-                            {t('logout')}
+                            {guestUser ? 'Exit Guest Mode' : t('logout')}
                           </button>
                         </div>
                       </div>
@@ -318,6 +460,11 @@ export default function UnifiedAuthScreen() {
                               error={loginPasswordError}
                               variant="login"
                             />
+                            {loginError && (
+                              <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>
+                                {loginError}
+                              </p>
+                            )}
                             <button
                               type="submit"
                               disabled={loginLoading}
@@ -362,6 +509,11 @@ export default function UnifiedAuthScreen() {
                             {regSuccess && (
                               <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>
                                 {regSuccess}
+                              </p>
+                            )}
+                            {regError && (
+                              <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>
+                                {regError}
                               </p>
                             )}
                             <button

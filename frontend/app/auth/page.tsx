@@ -10,6 +10,50 @@ import { COLORS, BUTTON_STYLES, TEXT_STYLES, LAYOUT_STYLES } from '../styles/the
 import Input from '../components/ui/Input';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 
+// Generate a unique guest ID
+const generateUniqueGuestId = (): string => {
+  const adjectives = [
+    'Happy', 'Sad', 'Sleepy', 'Angry', 'Excited', 'Calm', 'Brave', 'Clever', 
+    'Witty', 'Kind', 'Lucky', 'Mighty', 'Swift', 'Bold', 'Bright', 'Dark', 
+    'Fierce', 'Gentle', 'Jolly', 'Mystic', 'Noble', 'Quick', 'Royal', 'Smart',
+    'Wild', 'Zealous', 'Awesome', 'Cool', 'Epic', 'Funny', 'Great', 'Heroic'
+  ];
+  
+  const nouns = [
+    'Fox', 'Wolf', 'Eagle', 'Hawk', 'Lion', 'Tiger', 'Bear', 'Dragon', 
+    'Phoenix', 'Raven', 'Falcon', 'Owl', 'Shark', 'Dolphin', 'Panther', 
+    'Leopard', 'Cheetah', 'Horse', 'Deer', 'Rabbit', 'Squirrel', 'Otter',
+    'Panda', 'Koala', 'Kangaroo', 'Penguin', 'Duck', 'Swan', 'Crow', 'Hawk'
+  ];
+  
+  const numbers = Math.floor(Math.random() * 1000);
+  const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  
+  return `${randomAdjective}${randomNoun}${numbers}`;
+};
+
+// Store used guest IDs in localStorage to ensure uniqueness across sessions
+const getUsedGuestIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  const stored = localStorage.getItem('used_guest_ids');
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+};
+
+const saveUsedGuestId = (id: string) => {
+  if (typeof window === 'undefined') return;
+  const usedIds = getUsedGuestIds();
+  usedIds.add(id);
+  localStorage.setItem('used_guest_ids', JSON.stringify(Array.from(usedIds)));
+};
+
 export default function GameAuthPage() {
   const router = useRouter();
   const { user: authUser, login, isLoading: authLoading } = useAuth();
@@ -81,12 +125,36 @@ export default function GameAuthPage() {
   };
 
   const handleGuestPlay = () => {
-    // Set guest account
+    // Generate a unique guest ID
+    let uniqueId = generateUniqueGuestId();
+    const usedIds = getUsedGuestIds();
+    
+    // Ensure uniqueness by checking against used IDs
+    let attempts = 0;
+    while (usedIds.has(uniqueId) && attempts < 10) {
+      uniqueId = generateUniqueGuestId();
+      attempts++;
+    }
+    
+    // If still not unique after 10 attempts, add timestamp
+    if (usedIds.has(uniqueId)) {
+      uniqueId = `${uniqueId}_${Date.now()}`;
+    }
+    
+    // Save to used IDs
+    saveUsedGuestId(uniqueId);
+    
+    // Store guest info
     localStorage.setItem('auth_token', 'anonymous');
     localStorage.setItem('auth_user', JSON.stringify({ 
-      username: 'Guest', 
-      isAnonymous: true 
+      username: uniqueId,
+      isAnonymous: true,
+      guestId: uniqueId
     }));
+    
+    // Also store in session for current session tracking
+    sessionStorage.setItem('guest_id', uniqueId);
+    
     // Redirect to game/lobby
     router.push(getReturnUrl());
   };

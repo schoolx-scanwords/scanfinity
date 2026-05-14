@@ -177,6 +177,7 @@ export default function GamePage() {
   const afkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isAfkRef = useRef(false);
   const isLeavingRef = useRef(false);
+  const currentRoomIdRef = useRef<string>('');
   
   useEffect(() => {
     const savedChatState = localStorage.getItem('game_chat_open');
@@ -284,14 +285,6 @@ export default function GamePage() {
     setIsClient(true);
     mountedRef.current = true;
     
-    // Clear any stale game state from localStorage on mount
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentRoomId = urlParams.get('room');
-    if (currentRoomId && myId) {
-      localStorage.removeItem(`game_progress_${currentRoomId}_${myId}_guesses`);
-      localStorage.removeItem(`game_progress_${currentRoomId}_${myId}_grid`);
-    }
-    
     return () => {
       mountedRef.current = false;
       if (wsRef.current?.readyState === WebSocket.OPEN && !isLeavingRef.current) {
@@ -300,7 +293,7 @@ export default function GamePage() {
       }
       if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current);
     };
-  }, [myId]);
+  }, []);
   
   useEffect(() => {
     if (roomId) setMaxPlayers(getMaxPlayersFromRoomId(roomId));
@@ -452,33 +445,38 @@ export default function GamePage() {
   
   const handlePlayAgain = useCallback(() => {
     if (isLeavingRef.current) return;
-    isLeavingRef.current = true;
     
+    console.log('Play again clicked - staying in same room:', roomId);
+    
+    // Send play_again message to server
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
-        type: 'reset_game',
+        type: 'play_again',
         playerId: myId
       }));
-      
-      setTimeout(() => {
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
-        }
-      }, 100);
     }
     
-    // Clear all localStorage game data
+    // Reset local state for the new game
+    setGameOver(false);
+    setGameWinner(null);
+    setIsDraw(false);
+    setPlayerFinalScore(0);
+    setOpponentFinalScore(0);
+    setMyGuessedIds([]);
+    setMyGridStateArray([]);
+    setGameInProgress(false);
+    setShowWaitingRoom(true);
+    setIsReady(false);
+    completionCheckRef.current = false;
+    gameStartTimeRef.current = 0;
+    isAfkRef.current = false;
+    
+    // Clear local storage progress for this room
     if (roomId && myId) {
       localStorage.removeItem(`game_progress_${roomId}_${myId}_guesses`);
       localStorage.removeItem(`game_progress_${roomId}_${myId}_grid`);
     }
-    localStorage.removeItem('current_game_room');
-    localStorage.removeItem('game_chat_open');
-    localStorage.removeItem('game_opponents_open');
-    
-    router.push('/lobby');
-  }, [router, myId, roomId]);
+  }, [roomId, myId]);
   
   const handleReturnToLobby = useCallback(() => {
     if (isLeavingRef.current) return;
@@ -525,6 +523,7 @@ export default function GamePage() {
       window.history.replaceState({}, '', `?room=${roomParam}`);
     }
     setRoomId(roomParam);
+    currentRoomIdRef.current = roomParam;
     localStorage.setItem('current_game_room', roomParam);
   }, [isClient]);
   
@@ -579,19 +578,21 @@ export default function GamePage() {
         return;
       }
       
-      if (data.type === 'game_ended') {
-        console.log('Game ended, redirecting to lobby...');
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
-        }
-        router.push('/lobby');
-        return;
-      }
-      
-      if (data.type === 'game_reset') {
-        console.log('Game reset, redirecting to lobby...');
-        router.push('/lobby');
+      if (data.type === 'game_reset_for_play_again') {
+        console.log('Game reset for play again - showing waiting room');
+        setGameOver(false);
+        setGameWinner(null);
+        setIsDraw(false);
+        setPlayerFinalScore(0);
+        setOpponentFinalScore(0);
+        setMyGuessedIds([]);
+        setMyGridStateArray([]);
+        setGameInProgress(false);
+        setShowWaitingRoom(true);
+        setIsReady(false);
+        completionCheckRef.current = false;
+        gameStartTimeRef.current = 0;
+        isAfkRef.current = false;
         return;
       }
       
@@ -875,7 +876,6 @@ export default function GamePage() {
     totalWords: wordCoords?.length || 0,
   };
   
-  // Render
   if (!isUserAuthenticated) {
     return (
       <div className={`${LAYOUT_STYLES.container} flex items-center justify-center`}>
