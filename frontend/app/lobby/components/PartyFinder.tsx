@@ -1,10 +1,42 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import RoomCard from "./RoomCard";
-import { rooms } from "../constants/rooms";
+
+interface Room {
+  id: string;
+  players: number;
+  maxPlayers: number;
+  category: string;
+  owner: string;
+  avatar?: string;
+  isPremium?: boolean;
+}
 
 export default function PartyFinder() {
+  const [rooms, setRooms] = useState<Room[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/lobbies", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setRooms(data);
+        }
+      } catch (err) {
+        console.error("Failed to load lobbies", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="flex justify-center px-6">
       <div className="relative w-full max-w-[1140px] h-[520px] rounded-[42px] bg-[var(--panel)] px-10 pt-8 pb-8 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
