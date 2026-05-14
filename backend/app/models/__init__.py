@@ -9,6 +9,7 @@ from .dto import (
     VerifyEmailDTO,
     ResendVerificationDTO,
 )
+from .lobby import LobbyCreateDTO, LobbyRoomDTO
 
 
 __all__ = [
@@ -25,4 +26,6 @@ __all__ = [
     "TokenWithUserDTO",
     "VerifyEmailDTO",
     "ResendVerificationDTO",
+    "LobbyCreateDTO",
+    "LobbyRoomDTO",
 ]

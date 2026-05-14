@@ -4,100 +4,227 @@ import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../../contexts/auth_context";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { getOrCreateDeviceId } from "../../lib/device";
 
 const difficulties = ["Easy", "Medium", "Hard"];
 const sizes = [20, 30, 40];
+const playerCounts = [1, 2, 3, 4];
 const themes = ["Memes", "Celebrities", "History", "Gaming"];
 
 export default function CreateGame() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { language } = useLanguage();
   const [difficultyIndex, setDifficultyIndex] = useState(1);
   const [sizeIndex, setSizeIndex] = useState(1);
+  const [playersIndex, setPlayersIndex] = useState(1);
   const [themeIndex, setThemeIndex] = useState(1);
+  const [players, setPlayers] = useState(4);
 
   const changeTheme = (direction: "prev" | "next") => {
     setThemeIndex((prev) => {
-      if (direction === "prev") return prev === 0 ? themes.length - 1 : prev - 1;
+      if (direction === "prev") {
+        return prev === 0 ? themes.length - 1 : prev - 1;
+      }
+
       return prev === themes.length - 1 ? 0 : prev + 1;
     });
   };
 
-  const handleCreate = () => {
-    const roomId = `room_${Math.random().toString(36).substr(2, 9)}`;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("last_room", roomId);
-      localStorage.setItem("lobby_difficulty", difficulties[difficultyIndex]);
-      localStorage.setItem("lobby_size", String(sizes[sizeIndex]));
-      localStorage.setItem("lobby_theme", themes[themeIndex]);
+  const handleCreate = async () => {
+    const owner = user?.username || "Guest";
+    const deviceId = getOrCreateDeviceId();
+
+    try {
+      const res = await fetch("/api/lobbies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          maxPlayers: players,
+          category: themes[themeIndex],
+          difficulty: difficulties[difficultyIndex],
+          size: String(sizes[sizeIndex]),
+          lang: language,
+          owner,
+          deviceId,
+          isPrivate: false,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || `HTTP ${res.status}`);
+      }
+
+      const lobby = await res.json();
+      const baseId = String(lobby.id);
+      const roomId = `${baseId}{${players}}`;
+
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("my_lobby_ids");
+          const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+          const next = Array.isArray(parsed) ? parsed : [];
+          if (!next.includes(baseId)) next.push(baseId);
+          localStorage.setItem("my_lobby_ids", JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+
+        localStorage.setItem("last_room", baseId);
+        localStorage.setItem("room_max_players", String(players));
+        localStorage.setItem("lobby_difficulty", difficulties[difficultyIndex]);
+        localStorage.setItem("lobby_size", String(sizes[sizeIndex]));
+        localStorage.setItem("lobby_theme", themes[themeIndex]);
+      }
+
+      router.push(`/game?room=${encodeURIComponent(roomId)}`);
+    } catch (err) {
+      console.error("Failed to create lobby", err);
     }
-    router.push(`/game?room=${encodeURIComponent(roomId)}`);
   };
 
   return (
     <section className="flex flex-col items-center px-6 pb-12">
       <div className="relative w-full max-w-[1140px]">
-        <div className="rounded-[42px] bg-[var(--panel)] px-8 pt-8 pb-12 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
+        {/* SETTINGS PANEL */}
+        <div className="rounded-[42px] bg-[var(--panel)] px-8 pt-8 pb-16 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
+          {/* HEADER */}
           <div className="flex items-center justify-center gap-4 mb-8">
             <div className="relative w-[44px] h-[44px]">
-              <Image src="/icons/create.svg" alt="Create Game" fill className="object-contain" />
+              <Image
+                src="/icons/create.svg"
+                alt="Create Game"
+                fill
+                className="object-contain"
+              />
             </div>
-            <h2 className="text-[42px] text-white">Create Game:</h2>
+
+            <h2 className="text-[42px] text-white">
+              Create Game:
+            </h2>
           </div>
 
+          {/* SETTINGS */}
           <div className="flex flex-col gap-8 items-center">
-            <div className="w-full max-w-[90%] mb-6">
-              <label className="text-white text-[22px] mb-2 block">Difficulty:</label>
+            {/* Difficulty */}
+            <div className="w-full max-w-[90%]">
+              <label className="text-white text-[22px] mb-2 block">
+                Difficulty:
+              </label>
+
               <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
                 <motion.div
                   className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{ width: `${(difficultyIndex / (difficulties.length - 1)) * 100}%` }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  animate={{
+                    width: `${(difficultyIndex / (difficulties.length - 1)) * 100}%`,
+                  }}
+                  transition={{
+                    duration: 0.3,
+                    ease: "easeInOut",
+                  }}
                 />
               </div>
+
               <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {difficulties.map((d, i) => (
+                {difficulties.map((difficulty, index) => (
                   <motion.span
-                    key={d}
-                    className={`cursor-pointer ${i === difficultyIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setDifficultyIndex(i)}
+                    key={index}
+                    className={`cursor-pointer ${index === difficultyIndex ? "font-semibold" : "font-normal"}`}
+                    onClick={() => setDifficultyIndex(index)}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    {d}
+                    {difficulty}
                   </motion.span>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-[90%] mb-6">
-              <label className="text-white text-[22px] mb-2 block">Size:</label>
+            {/* Size */}
+            <div className="w-full max-w-[90%]">
+              <label className="text-white text-[22px] mb-2 block">
+                Size:
+              </label>
+
               <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
                 <motion.div
                   className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{ width: `${(sizeIndex / (sizes.length - 1)) * 100}%` }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  animate={{
+                    width: `${(sizeIndex / (sizes.length - 1)) * 100}%`,
+                  }}
+                  transition={{
+                    duration: 0.3,
+                    ease: "easeInOut",
+                  }}
                 />
               </div>
+
               <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {sizes.map((s, i) => (
+                {sizes.map((size, index) => (
                   <motion.span
-                    key={s}
-                    className={`cursor-pointer ${i === sizeIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setSizeIndex(i)}
+                    key={index}
+                    className={`cursor-pointer ${index === sizeIndex ? "font-semibold" : "font-normal"}`}
+                    onClick={() => setSizeIndex(index)}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    {s}
+                    {size}
                   </motion.span>
                 ))}
               </div>
             </div>
 
-            <div className="relative w-full max-w-[400px] -top-4">
-              <label className="text-white text-[22px] mb-2 block">Theme:</label>
+       {/* Players */}
+<div className="relative w-full max-w-[400px] -top-2">
+  <label className="text-white text-[22px] mb-2 block">
+    Players:
+  </label>
+
+  <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+    <motion.button
+      className="text-[22px] font-bold"
+      onClick={() => setPlayers((prev) => (prev === 1 ? 20 : prev - 1))}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      &lt;
+    </motion.button>
+
+    <motion.span
+      key={players}
+      initial={{ opacity: 0, y: -5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        type: "spring",
+        stiffness: 120,
+        damping: 20,
+      }}
+      className="text-[22px] font-medium"
+    >
+      {players}
+    </motion.span>
+
+    <motion.button
+      className="text-[22px] font-bold"
+      onClick={() => setPlayers((prev) => (prev === 20 ? 1 : prev + 1))}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      &gt;
+    </motion.button>
+  </div>
+</div>
+            {/* Theme */}
+            <div className="relative w-full max-w-[400px]">
+              <label className="text-white text-[22px] mb-2 block">
+                Theme:
+              </label>
+
               <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
                 <motion.button
-                  type="button"
                   className="text-[20px] font-bold"
                   onClick={() => changeTheme("prev")}
                   whileHover={{ scale: 1.1 }}
@@ -105,17 +232,28 @@ export default function CreateGame() {
                 >
                   &lt;
                 </motion.button>
+
                 <motion.span
                   key={themes[themeIndex]}
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: "spring", stiffness: 120, damping: 20 }}
+                  initial={{
+                    opacity: 0,
+                    y: -5,
+                  }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 120,
+                    damping: 20,
+                  }}
                   className="text-[20px] font-medium"
                 >
                   {themes[themeIndex]}
                 </motion.span>
+
                 <motion.button
-                  type="button"
                   className="text-[20px] font-bold"
                   onClick={() => changeTheme("next")}
                   whileHover={{ scale: 1.1 }}
@@ -128,12 +266,24 @@ export default function CreateGame() {
           </div>
         </div>
 
+        {/* CREATE BUTTON */}
         <motion.button
-          type="button"
-          onClick={handleCreate}
-          className="absolute left-1/2 -bottom-20 transform -translate-x-1/2 bg-[var(--accent)] text-white px-14 py-4 rounded-full text-[24px] font-semibold"
+          className="
+            absolute
+            left-1/2
+            -bottom-20
+            -translate-x-1/2
+            bg-[#00AFFF]
+            text-white
+            px-14
+            py-4
+            rounded-full
+            text-[24px]
+            font-semibold
+          "
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
+          onClick={handleCreate}
         >
           Create
         </motion.button>
