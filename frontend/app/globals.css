@@ -12,6 +12,16 @@
   }
 }
 
+:root {
+  --background: #130237;
+  --panel: #754ca8;
+  --panel-dark: #5f3d8a;
+  --accent: #00afff;
+
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.7);
+}
+
 @keyframes slide-in-from-bottom-10 {
   from {
     transform: translateY(10px);
