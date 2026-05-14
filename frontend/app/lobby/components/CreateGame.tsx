@@ -63,6 +63,16 @@ export default function CreateGame() {
       const roomId = `${baseId}{${players}}`;
 
       if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("my_lobby_ids");
+          const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+          const next = Array.isArray(parsed) ? parsed : [];
+          if (!next.includes(baseId)) next.push(baseId);
+          localStorage.setItem("my_lobby_ids", JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+
         localStorage.setItem("last_room", baseId);
         localStorage.setItem("room_max_players", String(players));
         localStorage.setItem("lobby_difficulty", difficulties[difficultyIndex]);

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { ChevronRight, Star } from "lucide-react";
+import { ChevronRight, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface RoomCardProps {
@@ -13,6 +13,8 @@ interface RoomCardProps {
   owner: string;
   avatar?: string;
   isPremium?: boolean;
+  canDelete?: boolean;
+  onDelete?: (id: string) => void;
 }
 
 export default function RoomCard({
@@ -23,6 +25,8 @@ export default function RoomCard({
   owner,
   avatar,
   isPremium,
+  canDelete = false,
+  onDelete,
 }: RoomCardProps) {
   const router = useRouter();
   const isFull = players >= maxPlayers;
@@ -37,9 +41,24 @@ export default function RoomCard({
     router.push(`/game?room=${encodeURIComponent(combinedRoomId)}`);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleOpen();
+    }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.(id);
+  };
+
   return (
-    <motion.button
+    <motion.div
+      role="button"
+      tabIndex={0}
       onClick={handleOpen}
+      onKeyDown={handleKeyDown}
       whileHover={{ scale: 1.012, y: -2 }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.18 }}
@@ -80,7 +99,18 @@ export default function RoomCard({
         </div>
       </div>
 
+      {canDelete ? (
+        <button
+          type="button"
+          onClick={handleDeleteClick}
+          className="absolute top-3 right-3 p-2 rounded-full bg-black/25 hover:bg-black/35"
+          aria-label="Delete lobby"
+        >
+          <Trash2 size={18} className="text-white/90" />
+        </button>
+      ) : null}
+
       <ChevronRight size={40} className="text-white/70 shrink-0 ml-auto" />
-    </motion.button>
+    </motion.div>
   );
 }

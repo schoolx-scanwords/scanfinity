@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 
 from models.lobby import LobbyCreateDTO, LobbyRoomDTO
-from database.lobbies import create_lobby, list_lobbies, join_lobby, leave_lobby
+from database.lobbies import create_lobby, list_lobbies, join_lobby, leave_lobby, delete_lobby
 
 
 router = APIRouter(prefix="/api")
@@ -50,3 +50,22 @@ async def post_leave_lobby(lobby_id: int, payload: dict):
 
     players = await leave_lobby(lobby_id=lobby_id, device_id=device_id)
     return {"players": players}
+
+
+@router.delete("/lobbies/{lobby_id}", status_code=204)
+async def delete_lobby_route(lobby_id: int, payload: dict):
+    device_id = str(payload.get("deviceId", "")).strip()
+    if not device_id:
+        raise HTTPException(status_code=422, detail="deviceId is required")
+
+    try:
+        await delete_lobby(lobby_id=lobby_id, device_id=device_id)
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "lobby_not_found":
+            raise HTTPException(status_code=404, detail="Lobby not found")
+        if msg == "not_owner":
+            raise HTTPException(status_code=403, detail="Only lobby creator can delete")
+        raise HTTPException(status_code=400, detail=msg)
+
+    return None

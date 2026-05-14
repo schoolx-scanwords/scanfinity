@@ -253,3 +253,37 @@ async def leave_lobby(*, lobby_id: int, device_id: str) -> int:
                 )
                 count_row = await cur.fetchone()
                 return int(count_row[0] if count_row else 0)
+
+
+async def delete_lobby(*, lobby_id: int, device_id: str) -> None:
+    pool = await connect()
+
+    async with pool.connection() as conn:
+        async with conn.transaction():
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT id FROM players WHERE guest_device_id = %s",
+                    (device_id,),
+                )
+                player_row = await cur.fetchone()
+                if not player_row:
+                    raise ValueError("not_owner")
+
+                player_id = int(player_row[0])
+
+                await cur.execute(
+                    "SELECT host_player_id FROM lobbies WHERE lobby_id = %s",
+                    (lobby_id,),
+                )
+                lobby_row = await cur.fetchone()
+                if not lobby_row:
+                    raise ValueError("lobby_not_found")
+
+                host_player_id = int(lobby_row[0])
+                if host_player_id != player_id:
+                    raise ValueError("not_owner")
+
+                await cur.execute(
+                    "DELETE FROM lobbies WHERE lobby_id = %s",
+                    (lobby_id,),
+                )
