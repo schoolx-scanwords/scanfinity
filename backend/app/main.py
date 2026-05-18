@@ -13,6 +13,7 @@ from routers.auth import router as auth_router
 from routers.email_verification import router as email_verification_router
 from routers.game import router as game_router
 from routers.game_websocket import router as game_websocket_router
+from routers.elo import router as elo_router
 from routers.lobbies import router as lobbies_router
 from routers.users import router as users_router
 
@@ -50,6 +51,7 @@ app.mount("/_next", StaticFiles(directory=os.path.join(nextjs_output_path, "_nex
 app.include_router(game_router)
 app.include_router(game_websocket_router)
 app.include_router(lobbies_router)
+app.include_router(elo_router)
 app.include_router(register_user_router)
 app.include_router(auth_router)
 app.include_router(email_verification_router)
