@@ -15,6 +15,7 @@ from routers.game import router as game_router
 from routers.game_websocket import router as game_websocket_router
 from routers.elo import router as elo_router
 from routers.lobbies import router as lobbies_router
+from routers.matchmaking import router as matchmaking_router
 from routers.users import router as users_router
 
 
@@ -52,6 +53,7 @@ app.include_router(game_router)
 app.include_router(game_websocket_router)
 app.include_router(lobbies_router)
 app.include_router(elo_router)
+app.include_router(matchmaking_router)
 app.include_router(register_user_router)
 app.include_router(auth_router)
 app.include_router(email_verification_router)

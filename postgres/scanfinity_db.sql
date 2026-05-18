@@ -1,7 +1,8 @@
 -- 1) Enums
 CREATE TYPE lobby_status AS ENUM ('open', 'in_game', 'closed');
-CREATE TYPE game_type AS ENUM ('single', 'one_v_one', 'multi');
+CREATE TYPE game_type AS ENUM ('single', 'one_v_one', 'multi', 'rating');
 CREATE TYPE game_status AS ENUM ('created', 'running', 'finished', 'canceled');
+CREATE TYPE queue_status AS ENUM ('searching', 'matched', 'cancelled', 'expired');
 
 -- 2) Tables
 CREATE TABLE users (
@@ -100,6 +101,18 @@ CREATE TABLE game_players (
   PRIMARY KEY (game_id, player_id)
 );
 
+CREATE TABLE matchmaking_queue (
+  id serial PRIMARY KEY,
+  player_id int NOT NULL UNIQUE,
+  elo int NOT NULL DEFAULT 0,
+  game_type varchar(32) NOT NULL,
+  is_ranked boolean NOT NULL DEFAULT false,
+  filters jsonb DEFAULT '{}'::jsonb,
+  joined_at timestamp NOT NULL DEFAULT now(),
+  last_activity_at timestamp NOT NULL DEFAULT now(),
+  status queue_status NOT NULL DEFAULT 'searching'
+);
+
 -- 3) Constraints (CHECKs)
 ALTER TABLE players
   ADD CONSTRAINT players_exactly_one_identity_chk
@@ -162,14 +175,19 @@ ALTER TABLE game_players
   ADD CONSTRAINT game_players_player_fk FOREIGN KEY (player_id)
   REFERENCES players (id) ON DELETE CASCADE;
 
+ALTER TABLE matchmaking_queue
+  ADD CONSTRAINT matchmaking_queue_player_fk FOREIGN KEY (player_id)
+  REFERENCES players (id) ON DELETE CASCADE;
+
 -- 5) Indexes
 CREATE INDEX puzzles_lang_difficulty_size_idx ON puzzles (lang, difficulty, size);
 CREATE INDEX puzzles_topic_id_idx ON puzzles (topic_id);
 CREATE INDEX lobby_players_player_id_idx ON lobby_players (player_id);
 CREATE INDEX games_is_ranked_status_dt_idx ON games (is_ranked, game_status, date_time);
-
--- Additional recommended indexes on FKs to speed joins
 CREATE INDEX lobbies_host_player_id_idx ON lobbies (host_player_id);
 CREATE INDEX games_lobby_id_idx ON games (lobby_id);
 CREATE INDEX games_puzzle_id_idx ON games (puzzle_id);
 CREATE INDEX game_players_player_id_idx ON game_players (player_id);
+CREATE INDEX matchmaking_queue_game_type_elo_idx ON matchmaking_queue (game_type, elo, status);
+CREATE INDEX matchmaking_queue_filters_gin_idx ON matchmaking_queue USING GIN (filters jsonb_path_ops);
+CREATE INDEX matchmaking_queue_joined_at_idx ON matchmaking_queue (joined_at) WHERE status = 'searching';
