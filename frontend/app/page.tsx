@@ -266,7 +266,17 @@ export default function UnifiedAuthScreen() {
         setGuestUser(null);
         setRegSuccess(t('registerSuccess'));
       } else {
-        throw new Error('Auto-login failed');
+        const data = await loginRes.json().catch(() => ({}));
+        const detail = data.detail || 'Auto-login failed';
+
+        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
+          setRegPendingEmail(regEmail);
+          setRegSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
+          setShowRegister(false);
+          return;
+        }
+
+        throw new Error(detail);
       }
       
     } catch (err: any) {
