@@ -138,6 +138,7 @@ def insert_puzzle_sync(puzzle_obj):
     cur.execute(
         """
         INSERT INTO puzzles 
+        INSERT INTO puzzles 
         (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
@@ -148,7 +149,7 @@ def insert_puzzle_sync(puzzle_obj):
             puzzle_dict['difficulty'],
             puzzle_dict['size'],
             puzzle_dict.get('times_played', 0),
-            Jsonb(puzzle_dict['jsonb'])
+            Jsonb(puzzle_dict['json'])
         )
     )
     

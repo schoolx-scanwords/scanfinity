@@ -83,6 +83,8 @@ async def create_lobby(*, payload: dict[str, Any]) -> dict[str, Any]:
 
     game_type = _infer_game_type(max_players)
 
+    avatar_url = "/avatars/frog.svg"
+
     async with pool.connection() as conn:
         async with conn.transaction():
             player_id = await _upsert_player_id(
@@ -90,6 +92,22 @@ async def create_lobby(*, payload: dict[str, Any]) -> dict[str, Any]:
                 display_name=owner,
                 device_id=device_id,
             )
+
+            # Best-effort: if owner matches a registered username and has an avatar,
+            # expose it in lobby list. (Keeps current per-device player model intact.)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT u.id
+                    FROM users u
+                    WHERE u.username = %s AND u.product_image IS NOT NULL
+                    LIMIT 1
+                    """,
+                    (owner,),
+                )
+                urow = await cur.fetchone()
+                if urow:
+                    avatar_url = f"/api/users/{int(urow[0])}/avatar"
 
             topic_id = await _get_topic_id(conn=conn, name=category)
 
@@ -135,7 +153,7 @@ async def create_lobby(*, payload: dict[str, Any]) -> dict[str, Any]:
         "maxPlayers": max_players,
         "category": category,
         "owner": owner,
-        "avatar": "/avatars/frog.svg",
+        "avatar": avatar_url,
         "isPremium": False,
         "createdAt": created_at,
     }
@@ -155,6 +173,8 @@ async def list_lobbies(*, limit: int = 50, offset: int = 0, only_open: bool = Tr
                   t.name AS category,
                   p.display_name AS owner,
                   l.created_at,
+                                    u.id AS user_id,
+                                    (u.product_image IS NOT NULL) AS has_avatar,
                   (
                     SELECT COUNT(*)
                     FROM lobby_players lp
@@ -163,6 +183,7 @@ async def list_lobbies(*, limit: int = 50, offset: int = 0, only_open: bool = Tr
                 FROM lobbies l
                 LEFT JOIN topics t ON t.topic_id = l.topic_id
                 JOIN players p ON p.id = l.host_player_id
+                                LEFT JOIN users u ON u.username = p.display_name
                 {where_clause}
                 ORDER BY l.created_at DESC
                 LIMIT %s OFFSET %s
@@ -173,7 +194,10 @@ async def list_lobbies(*, limit: int = 50, offset: int = 0, only_open: bool = Tr
             rows = await cur.fetchall()
 
     result: list[dict[str, Any]] = []
-    for lobby_id, max_players, category, owner, created_at, players in rows:
+    for lobby_id, max_players, category, owner, created_at, user_id, has_avatar, players in rows:
+        avatar_url = "/avatars/frog.svg"
+        if user_id is not None and bool(has_avatar):
+            avatar_url = f"/api/users/{int(user_id)}/avatar"
         result.append(
             {
                 "id": str(int(lobby_id)),
@@ -181,7 +205,7 @@ async def list_lobbies(*, limit: int = 50, offset: int = 0, only_open: bool = Tr
                 "maxPlayers": int(max_players),
                 "category": category or "Unknown",
                 "owner": owner or "Unknown",
-                "avatar": "/avatars/frog.svg",
+                "avatar": avatar_url,
                 "isPremium": False,
                 "createdAt": created_at,
             }

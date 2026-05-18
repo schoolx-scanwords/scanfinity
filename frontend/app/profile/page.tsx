@@ -9,7 +9,7 @@ import Navbar from "@/app/lobby/components/Navbar";
 import { useAuth } from "@/app/contexts/auth_context";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -37,7 +37,7 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -49,6 +49,42 @@ export default function ProfilePage() {
     const imageUrl = URL.createObjectURL(file);
     objectUrlRef.current = imageUrl;
     setAvatar(imageUrl);
+
+    // Persist for authenticated users.
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      if (!token || token === "anonymous" || !user?.id) {
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await fetch("/api/users/me/avatar", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || `HTTP ${res.status}`);
+      }
+
+      const serverUrl = `/api/users/${encodeURIComponent(String(user.id))}/avatar?v=${Date.now()}`;
+      updateUser({ avatar: serverUrl });
+
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+
+      setAvatar(serverUrl);
+    } catch (err) {
+      console.error("Failed to upload avatar", err);
+    }
   };
 
   return (

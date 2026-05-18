@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List
 
 class Word(BaseModel):
@@ -20,10 +20,12 @@ class Guess(BaseModel):
 
 # classes for objects in database
 class Puzzle(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     puzzle_id: int
     lang: str
-    topic: str
+    topic_id: int | None = None
     difficulty: str
-    size: int
+    size: int | str
     times_played: int = 0
-    jsonb: dict
+    json_data: dict = Field(alias="json")
