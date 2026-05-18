@@ -16,6 +16,19 @@
 	- cp .env.example .env
 3. В файле .env задайте значения переменных POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB. Эти значения должны совпадать с теми, которые будут использоваться контейнером Postgres (docker-compose читает их из .env).
 
+#### 2.1. Email подтверждение (SMTP)
+
+Регистрация пользователя создаёт токен подтверждения и отправляет письмо. Настройки берутся из `.env`:
+
+- `EMAIL_VERIFY_BASE_URL` — базовый URL сайта (в проде: `https://<ваш-домен>`), чтобы ссылка в письме вела на страницу `/verify-email/?token=...`.
+- `EMAIL_TOKEN_SECRET` и `JWT_SECRET_KEY` — обязательно поменяйте в продакшене (случайные длинные значения).
+- SMTP (если не настроить, бэкенд будет печатать ссылку в консоль):
+	- `SMTP_HOST`, `SMTP_PORT`
+	- `SMTP_USER`, `SMTP_PASSWORD`
+	- `SMTP_FROM` (например, `no-reply@ваш-домен`)
+	- `SMTP_FROM_NAME` (опционально)
+	- `SMTP_USE_TLS=true` для порта 587 (STARTTLS) или `SMTP_USE_SSL=true` для порта 465 (SMTPS)
+
 ### 3. Запуск базы данных (Docker)
 
 1. Из корня проекта поднимите контейнер с Postgres:

@@ -248,35 +248,11 @@ export default function UnifiedAuthScreen() {
         throw new Error(data.detail || t('registerError'));
       }
 
-      const loginRes = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: regUsername, password: regPassword }),
-      });
-
-      if (loginRes.ok) {
-        const loginData = await loginRes.json();
-        login({
-          id: loginData.user.id,
-          username: loginData.user.username || regUsername,
-          email: loginData.user.email || regEmail,
-          avatar: loginData.user.avatar,
-        }, loginData.access_token);
-        setAuthState('profile');
-        setGuestUser(null);
-        setRegSuccess(t('registerSuccess'));
-      } else {
-        const data = await loginRes.json().catch(() => ({}));
-        const detail = data.detail || 'Auto-login failed';
-
-        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
-          setRegPendingEmail(regEmail);
-          setRegSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
-          return;
-        }
-
-        throw new Error(detail);
-      }
+      // Email verification is required before login.
+      // Show a success message and let the user confirm via email first.
+      setRegPendingEmail(regEmail);
+      setRegSuccess(t('registerSuccessVerifyEmail'));
+      setRegPassword('');
       
     } catch (err: any) {
       setRegError(err.message || t('registerError'));
@@ -592,6 +568,25 @@ export default function UnifiedAuthScreen() {
                                 {regError}
                               </p>
                             )}
+                              {regPendingEmail && (
+                                <div className="space-y-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleRegisterResend}
+                                    disabled={regResendLoading}
+                                    className={`w-full ${BUTTON_STYLES.secondary} ${regResendLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                    {regResendLoading ? t('sending') : t('resendVerification')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowRegister(false)}
+                                    className={`w-full ${BUTTON_STYLES.secondary}`}
+                                  >
+                                    {t('goToLogin')}
+                                  </button>
+                                </div>
+                              )}
                             <button
                               type="submit"
                               disabled={regLoading}
