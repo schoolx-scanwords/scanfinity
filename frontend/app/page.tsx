@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from './contexts/auth_context';
@@ -106,8 +106,6 @@ export default function UnifiedAuthScreen() {
   const { t } = useLanguage();
   const [activePlack, setActivePlack] = useState<ActivePlack>('anonymous');
   const [authState, setAuthState] = useState<AuthState>('login');
-  const [rightColumnHeight, setRightColumnHeight] = useState(0);
-  const rightColumnRef = useRef<HTMLDivElement>(null);
   const [guestUser, setGuestUser] = useState<GuestUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   
@@ -183,16 +181,6 @@ export default function UnifiedAuthScreen() {
     setTimeout(() => setErrorState(false), 1000);
   };
 
-  useEffect(() => {
-    const updateHeight = () => {
-      if (rightColumnRef.current) setRightColumnHeight(rightColumnRef.current.clientHeight);
-    };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    setTimeout(updateHeight, 100);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
@@ -213,7 +201,15 @@ export default function UnifiedAuthScreen() {
         throw new Error(detail);
       }
       const data = await res.json();
-      login({ username: data.user.username || loginUsername, email: data.user.email || '' }, data.access_token);
+      login(
+        {
+          id: data.user?.id,
+          username: data.user?.username || loginUsername,
+          email: data.user?.email || '',
+          avatar: data.user?.avatar,
+        },
+        data.access_token
+      );
       setAuthState('profile');
       setGuestUser(null);
     } catch (err: any) {
@@ -257,9 +253,8 @@ export default function UnifiedAuthScreen() {
         body: JSON.stringify({ username: regUsername, email: regEmail, password: regPassword }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || t('registerError'));
-      setRegPendingEmail(regEmail);
-      setRegSuccess(t('registerSuccessVerifyEmail'));
       setRegPassword('');
+      router.push(`/verify-email?email=${encodeURIComponent(regEmail)}`);
     } catch (err: any) {
       setRegError(err.message);
       highlightInput(setRegUsernameError);
@@ -348,26 +343,25 @@ export default function UnifiedAuthScreen() {
   }
 
   return (
-    <div className={LAYOUT_STYLES.container}>
+    <div className={`${LAYOUT_STYLES.container} relative flex flex-col overflow-x-hidden`}>
       <LanguageSwitcher />
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row items-center justify-center min-h-screen gap-8">
-          {/* Left side - GIF */}
-          <div className="lg:w-1/3 flex justify-center">
-            {rightColumnHeight > 0 && (
-              <div className="relative" style={{ width: `${rightColumnHeight}px`, height: `${rightColumnHeight}px` }}>
+      <div className="flex-1 flex items-center">
+        <div className="max-w-7xl mx-auto w-full">
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-8 py-10 lg:py-0">
+            {/* Left side - GIF */}
+            <div className="w-full lg:w-1/3 flex justify-center">
+              <div className="relative w-full max-w-[260px] sm:max-w-[340px] lg:max-w-[420px] aspect-square">
                 <Image src="/question.gif" alt="question" fill className="object-contain" unoptimized />
               </div>
-            )}
-          </div>
-
-          {/* Right side - Content */}
-          <div ref={rightColumnRef} className="lg:w-2/4 flex flex-col items-start">
-            <div className="relative h-32 w-full max-w-md mb-6 self-start">
-              <Image src="/logo_left.svg" alt="Icon" fill className="object-contain object-left" />
             </div>
 
-            <div className="relative w-full max-w-[580px]">
+            {/* Right side - Content */}
+            <div className="w-full lg:w-2/4 flex flex-col items-center lg:items-start">
+            <div className="relative h-24 sm:h-32 w-full max-w-md mb-6 self-center lg:self-start">
+              <Image src="/logo_left.svg" alt="Icon" fill className="object-contain object-center lg:object-left" />
+            </div>
+
+            <div className="relative w-full max-w-[580px] mx-auto lg:mx-0">
               <div className="relative">
                 <div className={`transition-opacity duration-500 ${activePlack === 'authenticated' ? COLORS.activeOpacity : COLORS.inactiveOpacity}`}>
                   <img src="/homepage_plack.svg" alt="Authenticated Plack" className="w-full h-auto" />
@@ -398,7 +392,7 @@ export default function UnifiedAuthScreen() {
               <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'authenticated' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                 <div className="absolute inset-0 flex flex-col px-[12%] py-[15%]" style={{ paddingTop: '18%', paddingBottom: '15%' }}>
                   {authState === 'profile' && displayUser ? (
-                    <Card className="w-[calc(100%+40px)] -mx-5 p-3 sm:p-4 md:p-5 -mt-6">
+                    <Card className="w-full p-3 sm:p-4 md:p-5 -mt-6">
                       <div className="flex items-center gap-3">
                         <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
                           {displayUser.avatar ? (
@@ -457,7 +451,7 @@ export default function UnifiedAuthScreen() {
               <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'anonymous' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                 <div className="absolute inset-0 flex flex-col px-[12%] py-[15%]" style={{ paddingTop: '18%', paddingBottom: '15%' }}>
                   {guestUser ? (
-                    <Card className="w-[calc(100%+40px)] -mx-5 p-3 sm:p-4 md:p-5 -mt-6">
+                    <Card className="w-full p-3 sm:p-4 md:p-5 -mt-6">
                       <div className="flex items-center gap-3">
                         <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
                           {guestUser.avatar ? (
@@ -491,12 +485,23 @@ export default function UnifiedAuthScreen() {
             </div>
 
             {/* Three Buttons */}
-            <div className="flex gap-3 w-full max-w-[580px] mt-4 relative z-50">
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-[580px] mt-4 relative z-50 mx-auto lg:mx-0">
               <Button onClick={handleProfile} className="flex-1 py-2 text-xs sm:text-sm">{t('profileBtn')}</Button>
               <Button onClick={handlePlay} className="flex-1 py-2 text-xs sm:text-sm">{t('play')}</Button>
               <Button onClick={handleLeaders} className="flex-1 py-2 text-xs sm:text-sm">{t('leaders')}</Button>
             </div>
+            </div>
           </div>
+        </div>
+      </div>
+
+      <div className="w-full mt-auto pt-6">
+        <div className="max-w-7xl mx-auto w-full">
+          <div
+            aria-hidden="true"
+            className="w-full aspect-[1440/688] bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: "url('/BDFM_2026_05_16_16_27%201.svg')" }}
+          />
         </div>
       </div>
     </div>

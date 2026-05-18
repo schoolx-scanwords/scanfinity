@@ -47,8 +47,8 @@ export const BUTTON_STYLES = {
 };
 
 export const INPUT_STYLES = {
-  base: `w-full px-2 py-2 rounded-3xl ${COLORS.backgroundInput} ${COLORS.inputBorder} focus:outline-none focus:ring-2 ${COLORS.inputFocus} transition-all duration-200`,
-  login: `text-s`,
+  base: `w-full px-2 py-2 rounded-3xl ${COLORS.backgroundInput} ${COLORS.inputBorder} ${COLORS.textPrimary} ${COLORS.inputPlaceholder} focus:outline-none focus:ring-2 ${COLORS.inputFocus} transition-all duration-200`,
+  login: `text-sm`,
   register: `text-xs`,
 };
 

@@ -14,27 +14,33 @@ export default function Navbar() {
 
   return (
     <header
-      className="w-full h-[88px] bg-[#0E0128] border-b border-white/5 flex items-center justify-between px-6"
+      className="w-full h-[88px] bg-[#0E0128] border-b border-white/5 flex items-center justify-between px-4 sm:px-6"
     >
-      <motion.div
-        whileHover={{ scale: 1.02 }}
-        transition={{ duration: 0.2 }}
-        className="relative w-[230px] h-[52px] shrink-0"
+      <Link
+        href="/"
+        aria-label="Go to home"
+        className="shrink-0"
       >
-        <Image
-          src="/logo/logo.svg"
-          alt="Crossword Arena"
-          fill
-          priority
-          className="object-contain object-left"
-        />
-      </motion.div>
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          transition={{ duration: 0.2 }}
+          className="relative w-[160px] sm:w-[230px] h-[52px]"
+        >
+          <Image
+            src="/logo/logo.svg"
+            alt="Crossword Arena"
+            fill
+            priority
+            className="object-contain object-left"
+          />
+        </motion.div>
+      </Link>
 
-      <div className="flex items-center gap-4">
-        <div className="text-right leading-[1.1]">
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="text-right leading-[1.1] min-w-0">
           <h2 className="text-white text-[15px] font-semibold">{username}</h2>
           {email ? (
-            <p className="text-white/50 text-[11px] font-light">{email}</p>
+            <p className="text-white/50 text-[11px] font-light truncate max-w-[160px] sm:max-w-[260px]">{email}</p>
           ) : null}
         </div>
 

@@ -8,6 +8,25 @@ import { Plus } from "lucide-react";
 import Navbar from "@/app/lobby/components/Navbar";
 import { useAuth } from "@/app/contexts/auth_context";
 
+const decodeJwtSub = (token: string): string | null => {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const jsonPayload = decodeURIComponent(
+      atob(padded)
+        .split("")
+        .map((c) => `%${("00" + c.charCodeAt(0).toString(16)).slice(-2)}`)
+        .join("")
+    );
+    const payload = JSON.parse(jsonPayload);
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
@@ -40,6 +59,8 @@ export default function ProfilePage() {
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    // Allow selecting the same file again.
+    event.target.value = "";
 
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
@@ -53,8 +74,21 @@ export default function ProfilePage() {
     // Persist for authenticated users.
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-      if (!token || token === "anonymous" || !user?.id) {
+      if (!token || token === "anonymous") {
         return;
+      }
+
+      let resolvedUserId: string | number | undefined = user?.id;
+      if (!resolvedUserId || String(resolvedUserId).trim() === "") {
+        const sub = decodeJwtSub(token);
+        const parsedId = sub ? Number(sub) : NaN;
+        if (Number.isFinite(parsedId)) {
+          resolvedUserId = parsedId;
+          updateUser({ id: parsedId });
+        } else if (sub) {
+          resolvedUserId = sub;
+          updateUser({ id: sub });
+        }
       }
 
       const form = new FormData();
@@ -73,7 +107,12 @@ export default function ProfilePage() {
         throw new Error(data?.detail || `HTTP ${res.status}`);
       }
 
-      const serverUrl = `/api/users/${encodeURIComponent(String(user.id))}/avatar?v=${Date.now()}`;
+      if (!resolvedUserId || String(resolvedUserId).trim() === "") {
+        // Can't build a stable avatar URL without a user id.
+        return;
+      }
+
+      const serverUrl = `/api/users/${encodeURIComponent(String(resolvedUserId))}/avatar?v=${Date.now()}`;
       updateUser({ avatar: serverUrl });
 
       if (objectUrlRef.current) {
@@ -91,12 +130,12 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-[var(--background)] flex flex-col">
       <Navbar />
 
-      <section className="flex-1 flex justify-center items-center">
-        <div className="flex flex-col items-center -mt-16">
+      <section className="flex-1 flex justify-center items-center px-4 py-10">
+        <div className="flex flex-col items-center w-full max-w-xl text-center">
           <div className="relative">
             <motion.div
               whileHover={{ scale: 1.03 }}
-              className="relative w-[220px] h-[220px] rounded-full overflow-hidden"
+              className="relative w-[160px] h-[160px] sm:w-[200px] sm:h-[200px] lg:w-[220px] lg:h-[220px] rounded-full overflow-hidden"
             >
               <Image src={avatar} alt="Profile Avatar" fill className="object-cover" unoptimized />
             </motion.div>
@@ -113,21 +152,25 @@ export default function ProfilePage() {
               onClick={() => fileInputRef.current?.click()}
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.95 }}
-              className="absolute bottom-[-6px] right-[-18px] w-[96px] h-[96px] rounded-full bg-white flex items-center justify-center z-50"
+              className="absolute bottom-2 right-2 w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] rounded-full bg-white flex items-center justify-center z-50"
               aria-label="Change avatar"
               type="button"
             >
-              <Plus size={52} strokeWidth={4} className="text-black/10" />
+              <Plus size={44} strokeWidth={4} className="text-black/10" />
             </motion.button>
           </div>
 
-          <h1 className="mt-7 text-[72px] leading-none text-white font-medium">{username}</h1>
+          <h1 className="mt-7 text-4xl sm:text-6xl lg:text-[72px] leading-none text-white font-medium break-words">
+            {username}
+          </h1>
 
-          <p className="mt-2 text-[28px] text-white/70 underline">{email || "—"}</p>
+          <p className="mt-2 text-base sm:text-xl lg:text-[28px] text-white/70 underline break-all">
+            {email || "—"}
+          </p>
 
           <div className="mt-5 flex flex-col items-center">
-            <span className="text-[30px] text-white/45">games played: 228</span>
-            <span className="text-[30px] text-white/45">in the rating: 10456</span>
+            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">games played: 228</span>
+            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">in the rating: 10456</span>
           </div>
         </div>
       </section>

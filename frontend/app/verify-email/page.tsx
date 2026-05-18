@@ -1,32 +1,40 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import Card from '@/app/components/ui/Card';
 import Button from '@/app/components/ui/Button';
 import { LAYOUT_STYLES, TEXT_STYLES, COLORS } from '@/app/styles/theme';
 
-type Status = 'loading' | 'success' | 'error';
+type Status = 'loading' | 'success' | 'error' | 'pending';
 
-function getTokenFromLocation(): string | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('token');
-}
-
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const token = searchParams.get('token');
+  const email = searchParams.get('email');
+
   const [status, setStatus] = useState<Status>('loading');
   const [message, setMessage] = useState<string>('');
-
-  const token = useMemo(() => getTokenFromLocation(), []);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendResult, setResendResult] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   useEffect(() => {
     async function run() {
+      setResendResult(null);
+      setResendError(null);
+
       if (!token) {
-        setStatus('error');
-        setMessage('Токен подтверждения не найден в ссылке.');
+        if (email) {
+          setStatus('pending');
+          setMessage(`Мы отправили письмо для подтверждения на ${email}. Откройте письмо и перейдите по ссылке.`);
+        } else {
+          setStatus('error');
+          setMessage('Токен подтверждения или email не найден в ссылке.');
+        }
         return;
       }
 
@@ -49,23 +57,80 @@ export default function VerifyEmailPage() {
     }
 
     run();
-  }, [token]);
+  }, [token, email]);
+
+  const handleResend = async () => {
+    if (!email) return;
+    setResendLoading(true);
+    setResendResult(null);
+    setResendError(null);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || 'Не удалось отправить письмо.');
+
+      setResendResult('Если аккаунт существует, письмо отправлено повторно.');
+    } catch (err: any) {
+      setResendError(err?.message || 'Не удалось отправить письмо.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   return (
-    <div className={`${LAYOUT_STYLES.container} ${LAYOUT_STYLES.centerFlex}`}>
-      <Card className="p-6 w-full max-w-md">
-        <h1 className={`${TEXT_STYLES.heading} text-xl mb-2`}>Подтверждение почты</h1>
+    <Card className="p-6 w-full max-w-md">
+      <h1 className={`${TEXT_STYLES.heading} text-xl mb-2`}>Подтверждение почты</h1>
 
-        {status === 'loading' && (
-          <p className={TEXT_STYLES.subheading}>Проверяем ссылку…</p>
-        )}
+      {status === 'loading' && (
+        <p className={TEXT_STYLES.subheading}>Проверяем ссылку…</p>
+      )}
 
-        {status !== 'loading' && (
-          <div className={`mt-3 p-3 rounded-2xl ${status === 'success' ? COLORS.successBg : COLORS.errorBg}`}>
-            <p className={status === 'success' ? COLORS.successText : COLORS.errorText}>{message}</p>
+      {status !== 'loading' ? (
+        <div
+          className={`mt-3 p-3 rounded-2xl ${
+            status === 'success' || status === 'pending' ? COLORS.successBg : COLORS.errorBg
+          }`}
+        >
+          <p
+            className={
+              status === 'success' || status === 'pending' ? COLORS.successText : COLORS.errorText
+            }
+          >
+            {message}
+          </p>
+        </div>
+      ) : null}
+
+      {status === 'pending' ? (
+        <div className="mt-4 space-y-3">
+          {resendResult ? (
+            <div className={`p-3 rounded-2xl ${COLORS.successBg}`}>
+              <p className={COLORS.successText}>{resendResult}</p>
+            </div>
+          ) : null}
+
+          {resendError ? (
+            <div className={`p-3 rounded-2xl ${COLORS.errorBg}`}>
+              <p className={COLORS.errorText}>{resendError}</p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button onClick={handleResend} disabled={resendLoading || !email}>
+              {resendLoading ? 'Отправляем…' : 'Отправить ещё раз'}
+            </Button>
+            <Button onClick={() => router.push('/')}>На главную</Button>
           </div>
-        )}
+        </div>
+      ) : null}
 
+      {status !== 'pending' ? (
         <div className="mt-6 flex gap-3">
           {status === 'success' ? (
             <Button onClick={() => router.push('/')}>Ко входу</Button>
@@ -73,7 +138,22 @@ export default function VerifyEmailPage() {
             <Button onClick={() => router.push('/')}>На главную</Button>
           )}
         </div>
-      </Card>
+      ) : null}
+    </Card>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <div className={`${LAYOUT_STYLES.container} ${LAYOUT_STYLES.centerFlex}`}>
+      <Suspense fallback={
+        <Card className="p-6 w-full max-w-md">
+           <h1 className={`${TEXT_STYLES.heading} text-xl mb-2`}>Подтверждение почты</h1>
+           <p className={TEXT_STYLES.subheading}>Загрузка...</p>
+        </Card>
+      }>
+        <VerifyEmailContent />
+      </Suspense>
     </div>
   );
 }

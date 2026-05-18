@@ -37,8 +37,8 @@ export default function RegisterPage() {
         throw new Error(data.detail || 'Ошибка регистрации');
       }
 
-      setPendingEmail(email);
-      setSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
+      setPassword('');
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err.message || 'Не удалось выполнить регистрацию');
     } finally {
