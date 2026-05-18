@@ -5,6 +5,9 @@ from . import Puzzle
 import json
 import asyncio
 
+
+PUZZLES_TABLE = "puzzles"
+
 # Global pool reference
 _pool = None
 
@@ -35,6 +38,19 @@ async def insert_puzzle(puzzle: Puzzle):
     """Insert a puzzle asynchronously"""
     puzzle_dict = puzzle.model_dump()
     pool = await get_pool()
+
+    # Accept either legacy fields (topic/jsonb) or schema fields (topic_id/json)
+    topic_id = puzzle_dict.get("topic_id")
+    if topic_id is None:
+        topic = puzzle_dict.get("topic")
+        if isinstance(topic, (int,)):
+            topic_id = topic
+        elif isinstance(topic, str) and topic.strip().isdigit():
+            topic_id = int(topic.strip())
+
+    puzzle_json = puzzle_dict.get("json")
+    if puzzle_json is None:
+        puzzle_json = puzzle_dict.get("jsonb")
     
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
@@ -47,11 +63,11 @@ async def insert_puzzle(puzzle: Puzzle):
                 (
                     puzzle_dict['puzzle_id'],
                     puzzle_dict['lang'],
-                    puzzle_dict['topic'],
+                    topic_id,
                     puzzle_dict['difficulty'],
                     puzzle_dict['size'],
                     puzzle_dict.get('times_played', 0),
-                    Jsonb(puzzle_dict['jsonb'])
+                    Jsonb(puzzle_json)
                 )
             )
             await conn.commit()

@@ -93,7 +93,7 @@ def insert_puzzle_sync(puzzle_obj):
     
     cur.execute(
         """
-        INSERT INTO "Puzzles" 
+        INSERT INTO puzzles 
         (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,

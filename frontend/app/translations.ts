@@ -34,6 +34,7 @@ export const translations = {
     // Loading states
     loggingIn: 'Входим...',
     registering: 'Регистрируем...',
+    sending: 'Отправляем...',
     
     // Error messages
     authError: 'Ошибка авторизации',
@@ -42,6 +43,11 @@ export const translations = {
     
     // Success messages
     registerSuccess: 'Регистрация прошла успешно!',
+    registerSuccessVerifyEmail: 'Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.',
+
+    // Email verification
+    resendVerification: 'Отправить письмо ещё раз',
+    goToLogin: 'Перейти ко входу',
     
     // Plack toggles
     authenticated: 'авторизваться',
@@ -84,6 +90,7 @@ export const translations = {
     // Loading states
     loggingIn: 'Logging in...',
     registering: 'Registering...',
+    sending: 'Sending...',
     
     // Error messages
     authError: 'Authentication error',
@@ -92,6 +99,11 @@ export const translations = {
     
     // Success messages
     registerSuccess: 'Registration successful!',
+    registerSuccessVerifyEmail: 'Registration successful! We sent a verification email. Confirm your email and then log in.',
+
+    // Email verification
+    resendVerification: 'Resend verification email',
+    goToLogin: 'Go to login',
     
     // Plack toggles
     authenticated: 'authenticated',
