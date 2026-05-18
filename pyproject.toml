@@ -13,4 +13,6 @@ dependencies = [
     "PyJWT>=2.12.1",
     "sqlalchemy>=2.0.48",
     "uvicorn[standard]>=0.42.0",
+    "dotenv>=0.9.9",
+    "asyncpg>=0.31.0",
 ]

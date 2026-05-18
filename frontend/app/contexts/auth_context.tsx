@@ -27,10 +27,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('auth_user');
     const token = localStorage.getItem('auth_token');
     
-    if (storedUser && token) {
+    // IMPORTANT: Ignore anonymous/guest tokens - they are not authenticated users
+    if (storedUser && token && token !== 'anonymous') {
       try {
         const userData = JSON.parse(storedUser);
-        setUser(userData);
+        // Make sure this is not a guest user
+        if (!userData.isAnonymous) {
+          setUser(userData);
+        } else {
+          // Clear guest data from auth context
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_token');
+        }
       } catch (error) {
         console.error('Failed to parse user data', error);
         localStorage.removeItem('auth_user');

@@ -153,6 +153,8 @@ export default function GamePage() {
   const [waitingPlayers, setWaitingPlayers] = useState<WaitingPlayer[]>([]);
   const [isHostPlayer, setIsHostPlayer] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  // null = verifying room, true = valid, false = invalid (will redirect)
+  const [isRoomValid, setIsRoomValid] = useState<boolean | null>(null);
   
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isOpponentsOpen, setIsOpponentsOpen] = useState(false);
@@ -178,6 +180,13 @@ export default function GamePage() {
   const isAfkRef = useRef(false);
   const isLeavingRef = useRef(false);
   const currentRoomIdRef = useRef<string>('');
+  
+  // Redirect to main page when lobby doesn't exist
+  const redirectToMain = useCallback(() => {
+    if (redirectDoneRef.current) return;
+    redirectDoneRef.current = true;
+    router.push('/');
+  }, [router]);
   
   useEffect(() => {
     const savedChatState = localStorage.getItem('game_chat_open');
@@ -509,6 +518,7 @@ export default function GamePage() {
     router.push('/lobby');
   }, [router, myId]);
   
+  // Extract lobby ID from room string and set roomId
   useEffect(() => {
     if (!isClient) return;
     const urlParams = new URLSearchParams(window.location.search);
@@ -518,6 +528,7 @@ export default function GamePage() {
       if (lastRoom) {
         roomParam = lastRoom;
       } else {
+        // Fallback – should not happen for legitimate room
         roomParam = `room_${Math.random().toString(36).substr(2, 9)}`;
       }
       window.history.replaceState({}, '', `?room=${roomParam}`);
@@ -527,6 +538,7 @@ export default function GamePage() {
     localStorage.setItem('current_game_room', roomParam);
   }, [isClient]);
   
+  // WebSocket connection and room validation
   useEffect(() => {
     if (!myId || !myName || !roomId) return;
     if (isConnectingRef.current || hasJoinedRef.current) return;
@@ -544,6 +556,8 @@ export default function GamePage() {
         setConnectionError('Connection timeout');
         setIsActuallyConnected(false);
         isConnectingRef.current = false;
+        setIsRoomValid(false);
+        redirectToMain();
       }
     }, 10000);
     
@@ -572,10 +586,22 @@ export default function GamePage() {
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
+      // Error handling – if lobby doesn't exist, mark invalid and redirect
       if (data.type === 'error') {
         console.error('Server error:', data.message);
         setConnectionError(data.message);
+        if (data.message && (data.message.includes('Lobby does not exist') || 
+            data.message.includes('lobby no longer exists') ||
+            data.message.includes('closed'))) {
+          setIsRoomValid(false);
+          redirectToMain();
+        }
         return;
+      }
+      
+      // Once we receive any non‑error message, the room is valid.
+      if (isRoomValid === null) {
+        setIsRoomValid(true);
       }
       
       if (data.type === 'game_reset_for_play_again') {
@@ -598,11 +624,9 @@ export default function GamePage() {
       
       if (data.type === 'room_full') {
         setConnectionError('Room is full');
+        setIsRoomValid(false);
+        redirectToMain();
         return;
-      }
-      
-      if (data.type === 'ready_update') {
-        // Not used in game page
       }
       
       if (data.type === 'players_update') {
@@ -776,13 +800,26 @@ export default function GamePage() {
       setIsActuallyConnected(false);
       setConnectionError('Connection failed');
       isConnectingRef.current = false;
+      setIsRoomValid(false);
+      redirectToMain();
     };
     
-    websocket.onclose = () => {
+    websocket.onclose = (event) => {
       clearTimeout(connectionTimeout);
       setIsActuallyConnected(false);
       isConnectingRef.current = false;
       hasJoinedRef.current = false;
+      
+      // If we never validated the room (isRoomValid still null) and close code indicates policy violation or reason mentions lobby,
+      // or if we already know it's invalid, redirect.
+      if (event.code === 1008 || (event.reason && event.reason.includes('Lobby does not exist'))) {
+        setIsRoomValid(false);
+        redirectToMain();
+      } else if (isRoomValid === null) {
+        // Closed before any valid message, likely room doesn't exist or other error
+        setIsRoomValid(false);
+        redirectToMain();
+      }
     };
     
     wsRef.current = websocket;
@@ -795,7 +832,7 @@ export default function GamePage() {
       }
       hasJoinedRef.current = false;
     };
-  }, [roomId, myId, myName, myEmail, isGuest]);
+  }, [roomId, myId, myName, myEmail, isGuest, redirectToMain]);
   
   const sendGameUpdate = useCallback((newGuessedIds: number[], newGridState: [string, string][]) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -876,6 +913,24 @@ export default function GamePage() {
     totalWords: wordCoords?.length || 0,
   };
   
+  // 1) Show loading spinner while room validity is being checked
+  if (isRoomValid === null) {
+    return (
+      <div className={`${LAYOUT_STYLES.container} flex items-center justify-center`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <div className={`${TEXT_STYLES.heading} text-xl`}>Connecting to game...</div>
+        </div>
+      </div>
+    );
+  }
+  
+  // 2) If room is invalid, show nothing (redirect already triggered)
+  if (isRoomValid === false) {
+    return null;
+  }
+  
+  // 3) Normal rendering (room is valid)
   if (!isUserAuthenticated) {
     return (
       <div className={`${LAYOUT_STYLES.container} flex items-center justify-center`}>

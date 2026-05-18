@@ -19,9 +19,25 @@ export default function PartyFinder() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [myLobbyIds, setMyLobbyIds] = useState<Set<string>>(new Set());
 
+  // Fetch lobbies from API
+  const fetchLobbies = async () => {
+    try {
+      const res = await fetch("/api/lobbies", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setRooms(data);
+      }
+    } catch (err) {
+      console.error("Failed to load lobbies", err);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
+    let intervalId: NodeJS.Timeout | null = null;
 
+    // Load "my_lobby_ids" from localStorage
     try {
       const raw = localStorage.getItem("my_lobby_ids");
       const parsed = raw ? (JSON.parse(raw) as string[]) : [];
@@ -31,21 +47,19 @@ export default function PartyFinder() {
       setMyLobbyIds(new Set());
     }
 
-    (async () => {
-      try {
-        const res = await fetch("/api/lobbies", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) {
-          setRooms(data);
-        }
-      } catch (err) {
-        console.error("Failed to load lobbies", err);
+    // Initial fetch
+    fetchLobbies();
+
+    // Poll every 10 seconds to reflect lobby deletions/updates
+    intervalId = setInterval(() => {
+      if (!cancelled) {
+        fetchLobbies();
       }
-    })();
+    }, 10000);
 
     return () => {
       cancelled = true;
+      if (intervalId) clearInterval(intervalId);
     };
   }, []);
 
@@ -63,7 +77,9 @@ export default function PartyFinder() {
         throw new Error(data?.detail || `HTTP ${res.status}`);
       }
 
+      // Remove room from UI immediately
       setRooms((prev) => prev.filter((r) => r.id !== id));
+      // Also remove from "my rooms" set
       setMyLobbyIds((prev) => {
         const next = new Set(prev);
         next.delete(id);

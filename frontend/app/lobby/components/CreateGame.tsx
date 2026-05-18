@@ -10,7 +10,6 @@ import { getOrCreateDeviceId } from "../../lib/device";
 
 const difficulties = ["Easy", "Medium", "Hard"];
 const sizes = [20, 30, 40];
-const playerCounts = [1, 2, 3, 4];
 const themes = ["Memes", "Celebrities", "History", "Gaming"];
 
 export default function CreateGame() {
@@ -19,9 +18,8 @@ export default function CreateGame() {
   const { language } = useLanguage();
   const [difficultyIndex, setDifficultyIndex] = useState(1);
   const [sizeIndex, setSizeIndex] = useState(1);
-  const [playersIndex, setPlayersIndex] = useState(1);
-  const [themeIndex, setThemeIndex] = useState(1);
   const [players, setPlayers] = useState(4);
+  const [themeIndex, setThemeIndex] = useState(1);
 
   const changeTheme = (direction: "prev" | "next") => {
     setThemeIndex((prev) => {
@@ -177,46 +175,39 @@ export default function CreateGame() {
               </div>
             </div>
 
-       {/* Players */}
-<div className="relative w-full max-w-[400px] -top-2">
-  <label className="text-white text-[22px] mb-2 block">
-    Players:
-  </label>
+            {/* Players - Slider */}
+            <div className="w-full max-w-[90%]">
+              <div className="flex justify-between items-baseline mb-2">
+                <label className="text-white text-[22px]">
+                  Players:
+                </label>
+                <span className="text-white text-[28px] font-bold">
+                  {players}
+                </span>
+              </div>
 
-  <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
-    <motion.button
-      className="text-[22px] font-bold"
-      onClick={() => setPlayers((prev) => (prev === 1 ? 20 : prev - 1))}
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.95 }}
-    >
-      &lt;
-    </motion.button>
+              {/* Slider track background */}
+              <div className="relative pt-2">
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={players}
+                  onChange={(e) => setPlayers(parseInt(e.target.value))}
+                  className="w-full h-2 bg-[rgba(0,0,0,0.3)] rounded-lg appearance-none cursor-pointer accent-[#00AFFF]"
+                />
+                
+                {/* Tick marks */}
+                <div className="flex justify-between text-white text-[14px] mt-2 px-1 opacity-70">
+                  <span>1</span>
+                  <span>5</span>
+                  <span>10</span>
+                  <span>15</span>
+                  <span>20</span>
+                </div>
+              </div>
+            </div>
 
-    <motion.span
-      key={players}
-      initial={{ opacity: 0, y: -5 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        type: "spring",
-        stiffness: 120,
-        damping: 20,
-      }}
-      className="text-[22px] font-medium"
-    >
-      {players}
-    </motion.span>
-
-    <motion.button
-      className="text-[22px] font-bold"
-      onClick={() => setPlayers((prev) => (prev === 20 ? 1 : prev + 1))}
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.95 }}
-    >
-      &gt;
-    </motion.button>
-  </div>
-</div>
             {/* Theme */}
             <div className="relative w-full max-w-[400px]">
               <label className="text-white text-[22px] mb-2 block">
@@ -280,6 +271,8 @@ export default function CreateGame() {
             rounded-full
             text-[24px]
             font-semibold
+            hover:bg-[#0099dd]
+            transition-colors
           "
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
