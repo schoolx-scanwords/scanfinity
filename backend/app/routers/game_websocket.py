@@ -57,6 +57,8 @@ class PlayerSession:
         self.is_afk = False
         self.last_activity = datetime.now()
         self.reconnect_token = f"reconnect_{player_id}_{datetime.now().timestamp()}"
+        # Store the unique browser/device identifier
+        self.device_id = player_data.get("deviceId", session_id)
 
 
 class GameRoom:
@@ -69,12 +71,13 @@ class GameRoom:
         self.max_players = max_players
         self.players_ready = 0
         self.ready_status: Dict[str, bool] = {}
-        self.session_ids: Dict[str, str] = {}
+        self.session_ids: Dict[str, str] = {}  # session_id -> player_id
+        self.player_sessions_by_id: Dict[str, PlayerSession] = {}  # player_id -> PlayerSession
+        self.player_devices: Dict[str, str] = {}  # player_id -> device_id (to track multiple devices)
         self.join_order: Dict[str, int] = {}
         self.game_started = False
         self.game_ended = False
         self.next_join_order = 0
-        self.player_sessions: Dict[str, PlayerSession] = {}
         self.chat_history: List[Dict[str, Any]] = []
         self.max_chat_history = 200
         self.afk_check_task: Optional[asyncio.Task] = None
@@ -97,14 +100,40 @@ class GameRoom:
     def get_chat_history(self, limit: int = 100):
         return self.chat_history[-limit:] if self.chat_history else []
 
+    def is_player_already_connected(self, player_id: str, device_id: str = None) -> bool:
+        """
+        Check if a player is already connected to this room from any device.
+        Returns True if the player has an active session.
+        """
+        if player_id not in self.player_sessions_by_id:
+            return False
+        
+        existing_session = self.player_sessions_by_id[player_id]
+        
+        # If we have a device_id and it matches the existing session, it's the same device (reconnect)
+        if device_id and existing_session.device_id == device_id:
+            return False  # Same device, allow reconnect
+        
+        # Different device or no device_id provided - player is already connected elsewhere
+        return True
+
     def add_player(self, websocket: WebSocket, player_data: dict, session_id: str, is_reconnect: bool = False):
         if self.game_ended and not is_reconnect:
-            return False
+            return False, None
 
         player_id = player_data["playerId"]
+        device_id = player_data.get("deviceId", session_id)
 
-        if is_reconnect and player_id in self.player_sessions:
-            session = self.player_sessions[player_id]
+        # Check if player is already connected from a different device
+        if not is_reconnect and self.is_player_already_connected(player_id, device_id):
+            return False, "already_connected"
+
+        if is_reconnect and player_id in self.player_sessions_by_id:
+            session = self.player_sessions_by_id[player_id]
+            # Verify it's the same device for reconnect
+            if session.device_id != device_id:
+                return False, "different_device"
+            
             if session.websocket and session.websocket in self.connections:
                 del self.connections[session.websocket]
             session.websocket = websocket
@@ -113,25 +142,27 @@ class GameRoom:
             session.last_activity = datetime.now()
             self.connections[websocket] = session
             self.session_ids[session_id] = player_id
-            return True
+            return True, "reconnect"
         elif not is_reconnect:
-            if player_id in self.player_sessions:
-                return False
+            if player_id in self.player_sessions_by_id:
+                return False, "already_connected"
 
             session = PlayerSession(player_id, session_id, player_data)
+            session.device_id = device_id
             session.websocket = websocket
             self.connections[websocket] = session
-            self.player_sessions[player_id] = session
+            self.player_sessions_by_id[player_id] = session
             self.session_ids[session_id] = player_id
+            self.player_devices[player_id] = device_id
             self.ready_status[player_id] = player_data.get("isReady", False)
             if player_id not in self.join_order:
                 self.join_order[player_id] = self.next_join_order
                 self.next_join_order += 1
             if self.ready_status[player_id]:
                 self.players_ready += 1
-            return True
+            return True, "new"
 
-        return False
+        return False, None
 
     def remove_player(self, websocket: WebSocket, mark_afk: bool = False, is_leaving: bool = False):
         if websocket in self.connections:
@@ -144,7 +175,7 @@ class GameRoom:
                 del self.connections[websocket]
                 if session.session_id in self.session_ids:
                     del self.session_ids[session.session_id]
-
+                # Keep player in player_sessions_by_id for potential reconnect
             else:
                 if session.session_id in self.session_ids:
                     del self.session_ids[session.session_id]
@@ -154,12 +185,14 @@ class GameRoom:
                     del self.ready_status[player_id]
                 if player_id in self.join_order:
                     del self.join_order[player_id]
-                if player_id in self.player_sessions:
-                    del self.player_sessions[player_id]
+                if player_id in self.player_sessions_by_id:
+                    del self.player_sessions_by_id[player_id]
+                if player_id in self.player_devices:
+                    del self.player_devices[player_id]
                 del self.connections[websocket]
 
             # Return True if room is now empty
-            return len(self.player_sessions) == 0
+            return len(self.player_sessions_by_id) == 0
         return False
 
     async def remove_player_by_session(self, session: PlayerSession):
@@ -189,8 +222,10 @@ class GameRoom:
             del self.ready_status[player_id]
         if player_id in self.join_order:
             del self.join_order[player_id]
-        if player_id in self.player_sessions:
-            del self.player_sessions[player_id]
+        if player_id in self.player_sessions_by_id:
+            del self.player_sessions_by_id[player_id]
+        if player_id in self.player_devices:
+            del self.player_devices[player_id]
         if websocket and websocket in self.connections:
             del self.connections[websocket]
 
@@ -203,9 +238,9 @@ class GameRoom:
 
         # If the game was in progress and not already ended,
         # check if only one player remains -> declare winner.
-        if was_game_started and was_not_ended and len(self.player_sessions) == 1:
+        if was_game_started and was_not_ended and len(self.player_sessions_by_id) == 1:
             self.game_ended = True
-            remaining_player = next(iter(self.player_sessions.values()))
+            remaining_player = next(iter(self.player_sessions_by_id.values()))
             remaining_id = remaining_player.player_id
             remaining_name = remaining_player.player_data.get("name", "Unknown")
             # Send game_complete to the remaining player
@@ -223,7 +258,7 @@ class GameRoom:
                     pass
 
         # If room becomes empty, delete lobby
-        if len(self.player_sessions) == 0:
+        if len(self.player_sessions_by_id) == 0:
             host_device_id = await get_host_device_id(self.lobby_id)
             if host_device_id:
                 try:
@@ -238,7 +273,7 @@ class GameRoom:
         """Check all players and kick those AFK longer than 1 minute."""
         now = datetime.now()
         to_kick = []
-        for session in self.player_sessions.values():
+        for session in self.player_sessions_by_id.values():
             if session.is_afk and (now - session.last_activity).total_seconds() > 60:
                 to_kick.append(session)
         for session in to_kick:
@@ -261,12 +296,12 @@ class GameRoom:
 
         for player_id in self.ready_status:
             self.ready_status[player_id] = False
-        for session in self.player_sessions.values():
+        for session in self.player_sessions_by_id.values():
             session.player_data["guessedIds"] = []
             session.player_data["gridState"] = []
             session.is_afk = False
 
-        self.next_join_order = len(self.player_sessions)
+        self.next_join_order = len(self.player_sessions_by_id)
 
     def update_ready_status(self, player_id: str, is_ready: bool):
         if player_id in self.ready_status:
@@ -280,8 +315,8 @@ class GameRoom:
         return False
 
     def set_player_afk(self, player_id: str, is_afk: bool):
-        if player_id in self.player_sessions:
-            session = self.player_sessions[player_id]
+        if player_id in self.player_sessions_by_id:
+            session = self.player_sessions_by_id[player_id]
             session.is_afk = is_afk
             session.last_activity = datetime.now()
             return True
@@ -291,20 +326,37 @@ class GameRoom:
         return session_id in self.session_ids
 
     def is_player_in_game(self, player_id: str) -> bool:
-        return player_id in self.player_sessions
+        return player_id in self.player_sessions_by_id
 
     def is_room_full(self) -> bool:
-        active_players = sum(1 for s in self.player_sessions.values() if not s.is_afk)
+        active_players = sum(1 for s in self.player_sessions_by_id.values() if not s.is_afk)
         return active_players >= self.max_players
 
     def can_join_new_player(self) -> bool:
         return not self.game_started and not self.is_room_full() and not self.game_ended
 
-    def can_reconnect_player(self, player_id: str) -> bool:
-        return self.is_player_in_game(player_id)
+    def can_reconnect_player(self, player_id: str, device_id: str = None) -> tuple:
+        """
+        Check if a player can reconnect.
+        Returns (can_reconnect, reason)
+        """
+        if not self.is_player_in_game(player_id):
+            return False, "not_in_game"
+        
+        session = self.player_sessions_by_id[player_id]
+        # Allow reconnect only if it's the same device
+        if device_id and session.device_id == device_id:
+            return True, "same_device"
+        elif not device_id:
+            # If no device_id provided, check if they have an active WebSocket
+            if session.websocket is None:
+                return True, "reconnect_allowed"
+            return False, "already_connected_different_device"
+        
+        return False, "different_device"
 
     def all_players_ready(self) -> bool:
-        active_players = [s for s in self.player_sessions.values() if not s.is_afk]
+        active_players = [s for s in self.player_sessions_by_id.values() if not s.is_afk]
         if len(active_players) != self.max_players:
             return False
         active_ready = sum(1 for p in active_players if self.ready_status.get(p.player_id, False))
@@ -312,7 +364,7 @@ class GameRoom:
 
     def get_all_players_with_status(self):
         players = []
-        active_sessions = [(pid, s) for pid, s in self.player_sessions.items()]
+        active_sessions = [(pid, s) for pid, s in self.player_sessions_by_id.items()]
         sorted_sessions = sorted(active_sessions, key=lambda x: self.join_order.get(x[0], 999))
 
         for idx, (player_id, session) in enumerate(sorted_sessions):
@@ -331,13 +383,13 @@ class GameRoom:
         return players
 
     def get_player_name(self, player_id: str) -> str:
-        if player_id in self.player_sessions:
-            return self.player_sessions[player_id].player_data.get("name", "Unknown")
+        if player_id in self.player_sessions_by_id:
+            return self.player_sessions_by_id[player_id].player_data.get("name", "Unknown")
         return "Unknown"
 
     def update_player_progress(self, player_id: str, guessed_ids: List[int], grid_state: List[List[str]]):
-        if player_id in self.player_sessions:
-            session = self.player_sessions[player_id]
+        if player_id in self.player_sessions_by_id:
+            session = self.player_sessions_by_id[player_id]
             session.last_activity = datetime.now()
             session.player_data["guessedIds"] = guessed_ids
             session.player_data["gridState"] = grid_state
@@ -352,10 +404,11 @@ class GameRoom:
             except:
                 pass
         self.connections.clear()
-        self.player_sessions.clear()
+        self.player_sessions_by_id.clear()
         self.session_ids.clear()
         self.ready_status.clear()
         self.join_order.clear()
+        self.player_devices.clear()
 
 
 rooms: Dict[str, GameRoom] = {}
@@ -408,6 +461,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
             if msg_type == "join":
                 player_id = data["playerId"]
                 session_id = data.get("sessionId", "")
+                device_id = data.get("deviceId", session_id)  # Add deviceId to track devices
                 request_chat_history = data.get("requestChatHistory", True)
 
                 # Double-check lobby still exists (prevent race condition)
@@ -418,48 +472,73 @@ async def game_websocket(websocket: WebSocket, room_id: str):
 
                 # Check if this is a reconnecting player
                 if room.is_player_in_game(player_id):
-                    success = room.add_player(websocket, data, session_id, is_reconnect=True)
-                    if success:
-                        is_reconnect = True
+                    can_reconnect, reason = room.can_reconnect_player(player_id, device_id)
+                    
+                    if can_reconnect:
+                        success, result = room.add_player(websocket, data, session_id, is_reconnect=True)
+                        if success:
+                            is_reconnect = True
 
-                        for conn, sess in room.connections.items():
-                            if sess.player_id != player_id:
-                                try:
-                                    await conn.send_json({
-                                        "type": "player_reconnected",
-                                        "playerId": player_id,
-                                        "name": data.get("name", "Unknown"),
-                                        "guessedIds": data.get("guessedIds", []),
-                                        "gridState": data.get("gridState", []),
-                                        "isGuest": data.get("isGuest", False)
-                                    })
-                                except:
-                                    pass
+                            for conn, sess in room.connections.items():
+                                if sess.player_id != player_id:
+                                    try:
+                                        await conn.send_json({
+                                            "type": "player_reconnected",
+                                            "playerId": player_id,
+                                            "name": data.get("name", "Unknown"),
+                                            "guessedIds": data.get("guessedIds", []),
+                                            "gridState": data.get("gridState", []),
+                                            "isGuest": data.get("isGuest", False)
+                                        })
+                                    except:
+                                        pass
 
-                        all_players = room.get_all_players_with_status()
-                        await websocket.send_json({"type": "players_update", "players": all_players})
-                        await websocket.send_json({"type": "ready_update", "ready": room.players_ready})
+                            all_players = room.get_all_players_with_status()
+                            await websocket.send_json({"type": "players_update", "players": all_players})
+                            await websocket.send_json({"type": "ready_update", "ready": room.players_ready})
 
-                        if request_chat_history:
-                            chat_history = room.get_chat_history()
+                            if request_chat_history:
+                                chat_history = room.get_chat_history()
+                                await websocket.send_json({
+                                    "type": "chat_history",
+                                    "messages": chat_history
+                                })
+
+                            if room.game_started:
+                                await websocket.send_json({"type": "game_start"})
+
+                            session = room.player_sessions_by_id[player_id]
                             await websocket.send_json({
-                                "type": "chat_history",
-                                "messages": chat_history
+                                "type": "player_update",
+                                "playerId": player_id,
+                                "name": session.player_data.get("name"),
+                                "guessedIds": session.player_data.get("guessedIds", []),
+                                "gridState": session.player_data.get("gridState", [])
                             })
 
-                        if room.game_started:
-                            await websocket.send_json({"type": "game_start"})
-
-                        session = room.player_sessions[player_id]
-                        await websocket.send_json({
-                            "type": "player_update",
-                            "playerId": player_id,
-                            "name": session.player_data.get("name"),
-                            "guessedIds": session.player_data.get("guessedIds", []),
-                            "gridState": session.player_data.get("gridState", [])
-                        })
-
-                        continue
+                            continue
+                        else:
+                            # Reconnect failed
+                            await websocket.send_json({
+                                "type": "error", 
+                                "message": "Cannot reconnect from a different device. You are already playing in another window/tab."
+                            })
+                            await websocket.close(code=1008, reason="Already connected from another device")
+                            return
+                    else:
+                        # Player is already connected from a different device
+                        if "different_device" in reason:
+                            await websocket.send_json({
+                                "type": "error", 
+                                "message": "You are already playing this game from another device/browser. Please close that session first."
+                            })
+                        else:
+                            await websocket.send_json({
+                                "type": "error", 
+                                "message": f"Cannot join: {reason}"
+                            })
+                        await websocket.close(code=1008, reason=reason)
+                        return
 
                 # For NEW players
                 if room.game_started:
@@ -477,6 +556,15 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                     await websocket.close(code=1008, reason="Session already connected")
                     return
 
+                # Check if player is already in this room from another device
+                if room.is_player_already_connected(player_id, device_id):
+                    await websocket.send_json({
+                        "type": "error", 
+                        "message": "You are already playing this game from another device. Please close that session first."
+                    })
+                    await websocket.close(code=1008, reason="Already connected from another device")
+                    return
+
                 player_data = {
                     "playerId": player_id,
                     "name": data["name"],
@@ -485,9 +573,24 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                     "isGuest": data.get("isGuest", False),
                     "email": data.get("email", ""),
                     "isReady": False,
+                    "deviceId": device_id,
                 }
 
-                room.add_player(websocket, player_data, session_id, is_reconnect=False)
+                success, result = room.add_player(websocket, player_data, session_id, is_reconnect=False)
+                
+                if not success:
+                    if result == "already_connected":
+                        await websocket.send_json({
+                            "type": "error", 
+                            "message": "You are already playing this game from another device. Please close that session first."
+                        })
+                    else:
+                        await websocket.send_json({
+                            "type": "error", 
+                            "message": "Failed to join game"
+                        })
+                    await websocket.close(code=1008, reason=result)
+                    return
 
                 all_players = room.get_all_players_with_status()
                 for conn in room.connections:
@@ -559,7 +662,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                                     "name": data.get("name", "Unknown"),
                                     "guessedIds": data.get("guessedIds", []),
                                     "gridState": data.get("gridState", []),
-                                    "isAfk": room.player_sessions[player_id].is_afk if player_id in room.player_sessions else False
+                                    "isAfk": room.player_sessions_by_id[player_id].is_afk if player_id in room.player_sessions_by_id else False
                                 })
                             except:
                                 pass
@@ -590,8 +693,8 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                     sender_name = room.get_player_name(player_id)
                     message_text = data.get("message", "")
                     if message_text:
-                        is_guest = room.player_sessions[player_id].player_data.get("isGuest", False)
-                        email = room.player_sessions[player_id].player_data.get("email", "")
+                        is_guest = room.player_sessions_by_id[player_id].player_data.get("isGuest", False)
+                        email = room.player_sessions_by_id[player_id].player_data.get("email", "")
                         stored_message = room.add_chat_message(sender_name, message_text, is_guest, email)
 
                         for conn in room.connections:
@@ -658,7 +761,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                     room_empty = room.remove_player(websocket, mark_afk=False, is_leaving=True)
 
                     # If room is empty, delete from memory and database
-                    if room_empty or len(room.player_sessions) == 0:
+                    if room_empty or len(room.player_sessions_by_id) == 0:
                         host_device_id = await get_host_device_id(room.lobby_id)
                         if host_device_id:
                             try:
@@ -703,7 +806,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
                         pass
 
             # After removal, check if room is empty
-            if room_empty or len(room.player_sessions) == 0:
+            if room_empty or len(room.player_sessions_by_id) == 0:
                 host_device_id = await get_host_device_id(room.lobby_id)
                 if host_device_id:
                     try:
@@ -724,7 +827,7 @@ async def game_websocket(websocket: WebSocket, room_id: str):
         if room_id in rooms:
             try:
                 room = rooms[room_id]
-                if len(room.player_sessions) == 0:
+                if len(room.player_sessions_by_id) == 0:
                     host_device_id = await get_host_device_id(room.lobby_id)
                     if host_device_id:
                         await delete_lobby(lobby_id=room.lobby_id, device_id=host_device_id)

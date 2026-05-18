@@ -117,6 +117,16 @@ const getSessionId = (): string => {
   return sessionId;
 };
 
+const getDeviceId = (): string => {
+  if (typeof window === 'undefined') return '';
+  let deviceId = localStorage.getItem('game_device_id');
+  if (!deviceId) {
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 10)}`;
+    localStorage.setItem('game_device_id', deviceId);
+  }
+  return deviceId;
+};
+
 const getUserInfoFromStorage = () => {
   if (typeof window === 'undefined') return null;
   const token = localStorage.getItem('auth_token');
@@ -570,6 +580,7 @@ export default function GamePage() {
         type: 'join',
         playerId: myId,
         sessionId: sessionId,
+        deviceId: getDeviceId(),  // Add this line
         name: myName,
         email: myEmail,
         isGuest: isGuest,
@@ -582,7 +593,7 @@ export default function GamePage() {
       hasJoinedRef.current = true;
       isConnectingRef.current = false;
     };
-    
+        
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
