@@ -272,7 +272,6 @@ export default function UnifiedAuthScreen() {
         if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
           setRegPendingEmail(regEmail);
           setRegSuccess('Регистрация прошла успешно! Мы отправили письмо для подтверждения почты. Подтвердите почту и затем войдите.');
-          setShowRegister(false);
           return;
         }
 
