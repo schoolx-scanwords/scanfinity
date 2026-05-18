@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import Navbar from "@/app/lobby/components/Navbar";
 import { useAuth } from "@/app/contexts/auth_context";
@@ -28,7 +29,19 @@ const decodeJwtSub = (token: string): string | null => {
 };
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const router = useRouter();
+  const { user, isLoading, updateUser } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (user) return;
+
+    const returnUrl =
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}`
+        : "/profile";
+    router.replace(`/auth?return=${encodeURIComponent(returnUrl)}`);
+  }, [isLoading, user, router]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -38,6 +51,10 @@ export default function ProfilePage() {
   const initialAvatar = user?.avatar && user.avatar.trim() !== "" ? user.avatar : "/avatars/frog.svg";
 
   const [avatar, setAvatar] = useState<string>(initialAvatar);
+
+  if (!user) {
+    return <main className="min-h-screen bg-[var(--background)]" />;
+  }
 
   useEffect(() => {
     // If user changes (login/logout) and we didn't set a local upload, update avatar from auth.

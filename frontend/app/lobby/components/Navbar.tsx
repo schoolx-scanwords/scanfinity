@@ -11,6 +11,7 @@ export default function Navbar() {
   const username = user?.username || "Guest";
   const email = user?.email || "";
   const avatarSrc = user?.avatar && user.avatar.trim() !== "" ? user.avatar : "/avatars/frog.svg";
+  const canOpenProfile = Boolean(user);
 
   return (
     <header
@@ -44,15 +45,25 @@ export default function Navbar() {
           ) : null}
         </div>
 
-        <Link href="/profile" aria-label="Open profile">
-          <motion.div
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            className="relative w-[58px] h-[58px] rounded-full overflow-hidden border-[4px] border-[#754CA8]"
+        {canOpenProfile ? (
+          <Link href="/profile" aria-label="Open profile">
+            <motion.div
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              className="relative w-[58px] h-[58px] rounded-full overflow-hidden border-[4px] border-[#754CA8]"
+            >
+              <Image src={avatarSrc} alt={username} fill className="object-cover" />
+            </motion.div>
+          </Link>
+        ) : (
+          <div
+            aria-label="Profile (login required)"
+            aria-disabled="true"
+            className="relative w-[58px] h-[58px] rounded-full overflow-hidden border-[4px] border-[#754CA8] opacity-60 cursor-not-allowed"
           >
             <Image src={avatarSrc} alt={username} fill className="object-cover" />
-          </motion.div>
-        </Link>
+          </div>
+        )}
       </div>
     </header>
   );
