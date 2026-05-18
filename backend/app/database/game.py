@@ -23,17 +23,17 @@ def puzzle_obj(pzl_data, id, lang="ru", topic="мемы", difficulty="medium"):
     return Puzzle(
         puzzle_id=id,
         lang=lang,
-        topic=topic,
+        topic_id=None,
         difficulty=difficulty,
         size=len(jsonified_data.get("grid", [])),
         times_played=0,
-        jsonb=jsonified_data,
+        json=jsonified_data,
     )
 
 # Database interactions (now async)
 async def insert_puzzle(puzzle: Puzzle):
     """Insert a puzzle asynchronously"""
-    puzzle_dict = puzzle.model_dump()
+    puzzle_dict = puzzle.model_dump(by_alias=True)
     pool = await get_pool()
     
     async with pool.connection() as conn:
@@ -41,17 +41,17 @@ async def insert_puzzle(puzzle: Puzzle):
             await cur.execute(
                 """
                 INSERT INTO "puzzles" 
-                (puzzle_id, lang, topic, difficulty, size, times_played, jsonb) 
+                (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     puzzle_dict['puzzle_id'],
                     puzzle_dict['lang'],
-                    puzzle_dict['topic'],
+                    puzzle_dict.get('topic_id'),
                     puzzle_dict['difficulty'],
                     puzzle_dict['size'],
                     puzzle_dict.get('times_played', 0),
-                    Jsonb(puzzle_dict['jsonb'])
+                    Jsonb(puzzle_dict['json'])
                 )
             )
             await conn.commit()
@@ -75,9 +75,9 @@ async def get_puzzle_by_id(puzzle_id: int) -> dict | None:
                 columns = [desc[0] for desc in cur.description]
                 row_dict = dict(zip(columns, row))
                 
-                # Parse jsonb if it's stored as string
-                if 'jsonb' in row_dict and isinstance(row_dict['jsonb'], str):
-                    row_dict['jsonb'] = json.loads(row_dict['jsonb'])
+                # Parse json if it's stored as string
+                if 'json' in row_dict and isinstance(row_dict['json'], str):
+                    row_dict['json'] = json.loads(row_dict['json'])
                 
                 return row_dict
             return None
@@ -97,29 +97,29 @@ async def get_latest_puzzle() -> dict | None:
                 columns = [desc[0] for desc in cur.description]
                 row_dict = dict(zip(columns, row))
 
-                if 'jsonb' in row_dict and isinstance(row_dict['jsonb'], str):
-                    row_dict['jsonb'] = json.loads(row_dict['jsonb'])
+                if 'json' in row_dict and isinstance(row_dict['json'], str):
+                    row_dict['json'] = json.loads(row_dict['json'])
 
                 return row_dict
             return None
 
 async def get_puzzle_jsonb(puzzle_id: int) -> dict | None:
-    """Get only the JSONB data of a puzzle asynchronously"""
+    """Get only the JSON data of a puzzle asynchronously."""
     pool = await get_pool()
     
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT jsonb FROM "puzzles" WHERE puzzle_id = %s',
+                'SELECT json FROM "puzzles" WHERE puzzle_id = %s',
                 [puzzle_id]
             )
             row = await cur.fetchone()
             
             if row:
-                jsonb_data = row[0]
-                if isinstance(jsonb_data, str):
-                    jsonb_data = json.loads(jsonb_data)
-                return jsonb_data
+                json_data = row[0]
+                if isinstance(json_data, str):
+                    json_data = json.loads(json_data)
+                return json_data
             return None
 
 async def update_times_played(puzzle_id: int):
@@ -150,8 +150,8 @@ async def get_all_puzzles(limit: int = 100, offset: int = 0):
             puzzles = []
             for row in rows:
                 puzzle_dict = dict(zip(columns, row))
-                if 'jsonb' in puzzle_dict and isinstance(puzzle_dict['jsonb'], str):
-                    puzzle_dict['jsonb'] = json.loads(puzzle_dict['jsonb'])
+                if 'json' in puzzle_dict and isinstance(puzzle_dict['json'], str):
+                    puzzle_dict['json'] = json.loads(puzzle_dict['json'])
                 puzzles.append(puzzle_dict)
             
             return puzzles

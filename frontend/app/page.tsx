@@ -186,8 +186,10 @@ export default function UnifiedAuthScreen() {
       const data = await res.json();
       
       login({
+        id: data.user.id,
         username: data.user.username || loginUsername,
         email: data.user.email || '',
+        avatar: data.user.avatar,
       }, data.access_token);
       
       setAuthState('profile');
@@ -255,8 +257,10 @@ export default function UnifiedAuthScreen() {
       if (loginRes.ok) {
         const loginData = await loginRes.json();
         login({
-          username: regUsername,
-          email: regEmail,
+          id: loginData.user.id,
+          username: loginData.user.username || regUsername,
+          email: loginData.user.email || regEmail,
+          avatar: loginData.user.avatar,
         }, loginData.access_token);
         setAuthState('profile');
         setGuestUser(null);

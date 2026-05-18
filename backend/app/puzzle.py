@@ -89,22 +89,22 @@ def insert_puzzle_sync(puzzle_obj):
     
     cur = conn.cursor()
     
-    puzzle_dict = puzzle_obj.model_dump()
+    puzzle_dict = puzzle_obj.model_dump(by_alias=True)
     
     cur.execute(
         """
-        INSERT INTO "Puzzles" 
+        INSERT INTO puzzles 
         (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
         (
             puzzle_dict['puzzle_id'],
             puzzle_dict['lang'],
-            puzzle_dict['topic'],
+            puzzle_dict.get('topic_id'),
             puzzle_dict['difficulty'],
             puzzle_dict['size'],
             puzzle_dict.get('times_played', 0),
-            Jsonb(puzzle_dict['jsonb'])
+            Jsonb(puzzle_dict['json'])
         )
     )
     
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     pzl_obj = PZL(
         puzzle_id=jsonpzl["id"],
         lang="ru",
-        topic_id="1",
+        topic_id=None,
         difficulty="medium",
         size=len(jsonpzl["grid"]),
         times_played=0,

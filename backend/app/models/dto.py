@@ -16,6 +16,7 @@ class UserOutDTO(BaseModel):
     id: int
     username: str
     email: EmailStr
+    avatar: Optional[str] = None
     created_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 

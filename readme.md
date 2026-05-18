@@ -2,7 +2,7 @@
 
 ### 1. Предварительные требования
 
-- Установлен Docker и docker compose
+- Установлен Docker и Docker Compose (либо `docker compose`, либо `docker-compose`)
 - Установлен Python 3.12+ (см. `pyproject.toml`)
 - Установлен `uv` (https://docs.astral.sh/uv/)
 - Установлен Node.js 20+ и npm
@@ -19,7 +19,8 @@
 ### 3. Запуск базы данных (Docker)
 
 1. Из корня проекта поднимите контейнер с Postgres:
-	- docker compose up -d
+	- docker-compose up -d
+	  (или `docker compose up -d`, если установлен Compose v2)
 2. Убедитесь, что база запустилась и доступна на localhost:${POSTGRES_PORT:-5432} (порт задаётся переменной POSTGRES_PORT в .env).
 
 ### 4. Подготовка Python-окружения и установка зависимостей backend

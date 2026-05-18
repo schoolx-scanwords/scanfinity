@@ -7,7 +7,7 @@ from typing import Optional
 import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from models import User, UserLoginDTO, TokenWithUserDTO
+from models import UserLoginDTO, TokenWithUserDTO, UserOutDTO
 from database.connect import connect
 
 router = APIRouter()
@@ -40,7 +40,7 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 def build_auth_response(user: dict, access_token: str) -> TokenWithUserDTO:
     return TokenWithUserDTO(
         access_token=access_token,
-        user=User(**user),
+        user=UserOutDTO(**user),
     )
 
 async def get_db_connection():
@@ -55,7 +55,19 @@ async def login(login_data: UserLoginDTO):
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, username, email, password_hash, password_salt, created_at, is_active FROM users WHERE username = %s",
+                                """
+                                SELECT
+                                    id,
+                                    username,
+                                    email,
+                                    password_hash,
+                                    password_salt,
+                                    created_at,
+                                    is_active,
+                                    (product_image IS NOT NULL) AS has_avatar
+                                FROM users
+                                WHERE username = %s
+                                """,
                 (login_data.username,),
             )
             row = await cur.fetchone()
@@ -74,6 +86,7 @@ async def login(login_data: UserLoginDTO):
                 "password_salt": row[4],
                 "created_at": row[5],
                 "is_active": row[6],
+                "avatar": (f"/api/users/{int(row[0])}/avatar" if bool(row[7]) else None),
             }
             
             is_password_valid = verify_password(

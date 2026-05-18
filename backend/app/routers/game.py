@@ -31,7 +31,7 @@ async def get_grid():
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
     
-    pzl = puzzle.get('jsonb', {})
+    pzl = puzzle.get('json', {})
     puzzle_id = puzzle.get('puzzle_id')
 
     blank_words = []
@@ -54,7 +54,7 @@ async def check(guesses: PuzzleGuess):
     if not puzzle:
         raise HTTPException(status_code=404, detail="Puzzle not found")
     
-    pzl = puzzle.get('jsonb', {})
+    pzl = puzzle.get('json', {})
     
     correctly_guessed, game_state = check_if_solved(pzl, guesses)
     

@@ -44,8 +44,10 @@ export default function LoginPage() {
       const data = await res.json();
       login(
         {
+          id: data.user?.id,
           username: data.user?.username || username,
           email: data.user?.email || '',
+          avatar: data.user?.avatar,
         },
         data.access_token
       );
