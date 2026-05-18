@@ -127,17 +127,12 @@ def insert_puzzle_sync(puzzle_obj):
     )
     
     cur = conn.cursor()
-    puzzle_dict = puzzle_obj.model_dump()
-    
-    # Get topic_id from topic name (string)
-    topic_name = puzzle_dict['topic']   # e.g., "Memes"
-    # Synchronous call – we'll run the async helper in a sync way (for simplicity)
-    import asyncio
-    topic_id = asyncio.run(get_topic_id(topic_name))
+    puzzle_dict = puzzle_obj.model_dump(by_alias=True)
+
+    topic_id = puzzle_dict.get('topic_id')
     
     cur.execute(
         """
-        INSERT INTO puzzles 
         INSERT INTO puzzles 
         (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -145,7 +140,7 @@ def insert_puzzle_sync(puzzle_obj):
         (
             puzzle_dict['puzzle_id'],
             puzzle_dict['lang'],
-            topic_id,                     # now integer
+            topic_id,
             puzzle_dict['difficulty'],
             puzzle_dict['size'],
             puzzle_dict.get('times_played', 0),
@@ -175,14 +170,17 @@ if __name__ == "__main__":
     print()
     
     jsonpzl = pzl.get_json()
+
+    import asyncio
+    topic_id = asyncio.run(get_topic_id("Memes"))
     pzl_obj = PZL(
         puzzle_id=jsonpzl["id"],
         lang="ru",
-        topic="Memes",               # ← string topic name (must exist in topics table)
+        topic_id=topic_id,
         difficulty="medium",
         size=len(jsonpzl["grid"]),
         times_played=0,
-        jsonb=jsonpzl
+        json=jsonpzl,
     )
     
     insert_puzzle_sync(pzl_obj)
