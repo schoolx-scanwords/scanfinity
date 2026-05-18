@@ -40,7 +40,7 @@ async def insert_puzzle(puzzle: Puzzle):
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                INSERT INTO "Puzzles" 
+                INSERT INTO "puzzles" 
                 (puzzle_id, lang, topic, difficulty, size, times_played, jsonb) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
@@ -65,7 +65,7 @@ async def get_puzzle_by_id(puzzle_id: int) -> dict | None:
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT * FROM "Puzzles" WHERE puzzle_id = %s',
+                'SELECT * FROM "puzzles" WHERE puzzle_id = %s',
                 [puzzle_id]
             )
             row = await cur.fetchone()
@@ -89,7 +89,7 @@ async def get_latest_puzzle() -> dict | None:
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT * FROM "Puzzles" ORDER BY puzzle_id DESC LIMIT 1'
+                'SELECT * FROM "puzzles" ORDER BY puzzle_id DESC LIMIT 1'
             )
             row = await cur.fetchone()
 
@@ -110,7 +110,7 @@ async def get_puzzle_jsonb(puzzle_id: int) -> dict | None:
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT jsonb FROM "Puzzles" WHERE puzzle_id = %s',
+                'SELECT jsonb FROM "puzzles" WHERE puzzle_id = %s',
                 [puzzle_id]
             )
             row = await cur.fetchone()
@@ -129,7 +129,7 @@ async def update_times_played(puzzle_id: int):
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'UPDATE "Puzzles" SET times_played = times_played + 1 WHERE puzzle_id = %s',
+                'UPDATE "puzzles" SET times_played = times_played + 1 WHERE puzzle_id = %s',
                 [puzzle_id]
             )
             await conn.commit()
@@ -141,7 +141,7 @@ async def get_all_puzzles(limit: int = 100, offset: int = 0):
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT * FROM "Puzzles" LIMIT %s OFFSET %s',
+                'SELECT * FROM "puzzles" LIMIT %s OFFSET %s',
                 [limit, offset]
             )
             rows = await cur.fetchall()
