@@ -48,3 +48,6 @@ next-env.d.ts
 
 .vscode
 
+.next/
+node_modules
+out
