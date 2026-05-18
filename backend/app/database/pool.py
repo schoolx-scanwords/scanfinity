@@ -1,10 +1,3 @@
-"""Compatibility wrapper for the project's async Postgres pool.
-
-The codebase mostly uses :func:`database.connect.connect` / :func:`database.connect.close_connection`.
-This module keeps a small, stable API (`get_pool`, `init_pool`, `close_pool`) for callers that
-expect a dedicated pool module.
-"""
-
 from psycopg_pool import AsyncConnectionPool
 
 from .connect import connect, close_connection

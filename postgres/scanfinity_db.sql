@@ -1,6 +1,6 @@
 -- 1) Enums
 CREATE TYPE lobby_status AS ENUM ('open', 'in_game', 'closed');
-CREATE TYPE game_type AS ENUM ('single', 'one_v_one', 'multi', 'rating');
+CREATE TYPE game_type AS ENUM ('single', 'one_v_one', 'multi');
 CREATE TYPE game_status AS ENUM ('created', 'running', 'finished', 'canceled');
 CREATE TYPE queue_status AS ENUM ('searching', 'matched', 'cancelled', 'expired');
 
