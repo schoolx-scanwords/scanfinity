@@ -3,7 +3,7 @@ from datetime import datetime
 import hashlib
 import os
 
-from models import UserCreateDTO, UserOutDTO
+from models import UserCreateDTO, UserOutWithVerifyUrlDTO
 from database.connect import connect
 from services.email_sender import send_email_safe
 from services.email_verification import (
@@ -25,7 +25,12 @@ def hash_password(password: str) -> tuple[str, str]:
     return password_hash, salt.hex()
 
 
-@router.post("/api/users", response_model=UserOutDTO, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/users",
+    response_model=UserOutWithVerifyUrlDTO,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
 async def register_user(user_in: UserCreateDTO, background_tasks: BackgroundTasks):
     pool = await connect()
     
@@ -110,10 +115,19 @@ async def register_user(user_in: UserCreateDTO, background_tasks: BackgroundTask
             ),
         )
 
-        return UserOutDTO(
+        # Fallback/dev mode: if SMTP is not configured, return the verification
+        # link so UI can show it (instead of relying on email delivery).
+        smtp_host = os.getenv("SMTP_HOST", "").strip()
+        smtp_from = os.getenv("SMTP_FROM", "").strip()
+        smtp_user = os.getenv("SMTP_USER", "").strip()
+        force_expose = os.getenv("EMAIL_EXPOSE_VERIFY_URL", "").strip().lower() in {"1", "true", "yes"}
+        expose_verify_url = force_expose or (not smtp_host) or (not smtp_from and "@" not in smtp_user)
+
+        return UserOutWithVerifyUrlDTO(
             id=int(new_user[0]),
             username=new_user[1],
             email=new_user[2],
             created_at=new_user[3],
             is_active=bool(new_user[4]),
+            verify_url=(verify_url if expose_verify_url else None),
         )

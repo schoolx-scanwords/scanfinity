@@ -23,6 +23,17 @@ class UserOutDTO(BaseModel):
     class Config:
         from_attributes = True
 
+
+class UserOutWithVerifyUrlDTO(UserOutDTO):
+    # Dev / fallback mode: when SMTP is not configured, backend can provide the
+    # verification link directly to be shown in the UI.
+    verify_url: Optional[str] = None
+
+
+class UserStatsDTO(BaseModel):
+    elo: int
+    games_played: int
+
 class TokenDTO(BaseModel):
     access_token: str
     token_type: str = "bearer"

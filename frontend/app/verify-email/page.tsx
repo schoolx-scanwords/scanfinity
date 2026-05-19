@@ -15,6 +15,7 @@ function VerifyEmailContent() {
 
   const token = searchParams.get('token');
   const email = searchParams.get('email');
+  const verifyUrlParam = searchParams.get('verifyUrl');
 
   const [status, setStatus] = useState<Status>('loading');
   const [message, setMessage] = useState<string>('');
@@ -109,6 +110,22 @@ function VerifyEmailContent() {
 
       {status === 'pending' ? (
         <div className="mt-4 space-y-3">
+          {verifyUrlParam ? (
+            <div className={`p-3 rounded-2xl ${COLORS.successBg}`}>
+              <p className={COLORS.successText}>
+                Заглушка без почты: можно подтвердить по ссылке ниже.
+              </p>
+              <a
+                href={verifyUrlParam}
+                className={`mt-2 inline-block underline ${COLORS.successText}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Открыть ссылку подтверждения
+              </a>
+            </div>
+          ) : null}
+
           {resendResult ? (
             <div className={`p-3 rounded-2xl ${COLORS.successBg}`}>
               <p className={COLORS.successText}>{resendResult}</p>

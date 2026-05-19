@@ -1,9 +1,10 @@
 # connect.py
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from psycopg_pool import AsyncConnectionPool
 import os
 
-load_dotenv()
+# Load `.env` from the project root if present (best-effort).
+load_dotenv(find_dotenv(filename=".env", usecwd=False), override=False)
 
 # Database configuration
 HOST = "localhost"

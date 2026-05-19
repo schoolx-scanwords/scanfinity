@@ -252,9 +252,14 @@ export default function UnifiedAuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUsername, email: regEmail, password: regPassword }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail || t('registerError'));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t('registerError'));
+      const verifyUrl = typeof data?.verify_url === 'string' ? data.verify_url : null;
       setRegPassword('');
-      router.push(`/verify-email?email=${encodeURIComponent(regEmail)}`);
+      const nextUrl = verifyUrl
+        ? `/verify-email?email=${encodeURIComponent(regEmail)}&verifyUrl=${encodeURIComponent(verifyUrl)}`
+        : `/verify-email?email=${encodeURIComponent(regEmail)}`;
+      router.push(nextUrl);
     } catch (err: any) {
       setRegError(err.message);
       highlightInput(setRegUsernameError);

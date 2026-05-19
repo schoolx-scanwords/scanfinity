@@ -11,6 +11,48 @@ from database.connect import connect
 router = APIRouter()
 
 
+async def _increment_total_games_for_room(room: "GameRoom") -> None:
+    """Best-effort: increment users.total_games for all non-guest players in the room.
+
+    The websocket layer identifies players by arbitrary string ids. For authenticated
+    users, the frontend sends either numeric user id (preferred) or username.
+    """
+
+    pool = await connect()
+    async with pool.connection() as conn:
+        async with conn.transaction():
+            async with conn.cursor() as cur:
+                for session in room.player_sessions_by_id.values():
+                    is_guest = bool(session.player_data.get("isGuest", False))
+                    if is_guest:
+                        continue
+
+                    identifier = str(session.player_id)
+                    updated = False
+
+                    # Preferred: numeric user id.
+                    try:
+                        uid = int(identifier)
+                    except ValueError:
+                        uid = None
+
+                    if uid is not None:
+                        await cur.execute(
+                            "UPDATE users SET total_games = total_games + 1 WHERE id = %s",
+                            (uid,),
+                        )
+                        updated = cur.rowcount > 0
+
+                    # Fallback: username.
+                    if not updated:
+                        username = str(session.player_data.get("name") or identifier)
+                        await cur.execute(
+                            "UPDATE users SET total_games = total_games + 1 WHERE username = %s",
+                            (username,),
+                        )
+
+
+
 async def lobby_exists(lobby_id: int) -> bool:
     """
     Check if a lobby exists and is still open in the database.
@@ -240,6 +282,10 @@ class GameRoom:
         # check if only one player remains -> declare winner.
         if was_game_started and was_not_ended and len(self.player_sessions_by_id) == 1:
             self.game_ended = True
+            try:
+                await _increment_total_games_for_room(self)
+            except Exception as e:
+                print(f"Failed to persist AFK game completion for room {self.room_id}: {e}")
             remaining_player = next(iter(self.player_sessions_by_id.values()))
             remaining_id = remaining_player.player_id
             remaining_name = remaining_player.player_data.get("name", "Unknown")
@@ -712,6 +758,14 @@ async def game_websocket(websocket: WebSocket, room_id: str):
 
             elif msg_type == "game_complete":
                 if player_id:
+                    if not room.game_ended:
+                        room.game_ended = True
+                        try:
+                            await _increment_total_games_for_room(room)
+                        except Exception as e:
+                            # Don't break the websocket flow if DB write fails.
+                            print(f"Failed to persist game completion for room {room.room_id}: {e}")
+
                     for conn in room.connections:
                         try:
                             await conn.send_json({

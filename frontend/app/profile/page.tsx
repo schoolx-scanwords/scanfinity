@@ -32,6 +32,9 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user, isLoading, updateUser } = useAuth();
 
+  const [stats, setStats] = useState<{ elo: number; games_played: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
   useEffect(() => {
     if (isLoading) return;
     if (user) return;
@@ -52,9 +55,49 @@ export default function ProfilePage() {
 
   const [avatar, setAvatar] = useState<string>(initialAvatar);
 
-  if (!user) {
-    return <main className="min-h-screen bg-[var(--background)]" />;
-  }
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    if (!user) return;
+    if (!token || token === "anonymous") return;
+
+    const controller = new AbortController();
+    setStatsLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/users/me/stats", {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.detail || `HTTP ${res.status}`);
+        }
+
+        const data = (await res.json()) as { elo?: unknown; games_played?: unknown };
+        const elo = typeof data.elo === "number" ? data.elo : Number(data.elo);
+        const gamesPlayed =
+          typeof data.games_played === "number" ? data.games_played : Number(data.games_played);
+
+        setStats({
+          elo: Number.isFinite(elo) ? elo : 0,
+          games_played: Number.isFinite(gamesPlayed) ? gamesPlayed : 0,
+        });
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        console.error("Failed to load profile stats", err);
+      } finally {
+        setStatsLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [user?.id, user?.username]);
 
   useEffect(() => {
     // If user changes (login/logout) and we didn't set a local upload, update avatar from auth.
@@ -143,6 +186,10 @@ export default function ProfilePage() {
     }
   };
 
+  if (!user) {
+    return <main className="min-h-screen bg-[var(--background)]" />;
+  }
+
   return (
     <main className="min-h-screen bg-[var(--background)] flex flex-col">
       <Navbar />
@@ -186,8 +233,12 @@ export default function ProfilePage() {
           </p>
 
           <div className="mt-5 flex flex-col items-center">
-            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">games played: 228</span>
-            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">in the rating: 10456</span>
+            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">
+              games played: {statsLoading ? "—" : stats?.games_played ?? "—"}
+            </span>
+            <span className="text-lg sm:text-2xl lg:text-[30px] text-white/45">
+              in the rating: {statsLoading ? "—" : stats?.elo ?? "—"}
+            </span>
           </div>
         </div>
       </section>

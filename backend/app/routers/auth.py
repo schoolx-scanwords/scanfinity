@@ -6,6 +6,7 @@ from typing import Optional
 
 import jwt as pyjwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from models import UserLoginDTO, TokenWithUserDTO, UserOutDTO
 from database.connect import connect
@@ -162,6 +163,8 @@ async def login(login_data: UserLoginDTO, background_tasks: BackgroundTasks):
                         body_text=_build_verify_email_body(verify_url=verify_url),
                     )
                     email_sent = True
+                else:
+                    verify_url = None
 
                 detail = "Email is not verified."
                 if email_sent:
@@ -169,7 +172,18 @@ async def login(login_data: UserLoginDTO, background_tasks: BackgroundTasks):
                 else:
                     detail += " Письмо уже отправлялось недавно — проверьте почту и попробуйте позже."
 
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+                smtp_host = os.getenv("SMTP_HOST", "").strip()
+                smtp_from = os.getenv("SMTP_FROM", "").strip()
+                smtp_user = os.getenv("SMTP_USER", "").strip()
+                force_expose = os.getenv("EMAIL_EXPOSE_VERIFY_URL", "").strip().lower() in {"1", "true", "yes"}
+                expose_verify_url = bool(verify_url) and (force_expose or (not smtp_host) or (not smtp_from and "@" not in smtp_user))
+
+                # Keep `detail` as a string for existing frontend logic, but
+                # optionally add `verify_url` for the fallback UI.
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": detail, "verify_url": (verify_url if expose_verify_url else None)},
+                )
             
             del user_dict["password_hash"]
             del user_dict["password_salt"]

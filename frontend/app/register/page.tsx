@@ -37,8 +37,14 @@ export default function RegisterPage() {
         throw new Error(data.detail || 'Ошибка регистрации');
       }
 
+      const data = await res.json().catch(() => ({}));
+      const verifyUrl = typeof data?.verify_url === 'string' ? data.verify_url : null;
+
       setPassword('');
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      const nextUrl = verifyUrl
+        ? `/verify-email?email=${encodeURIComponent(email)}&verifyUrl=${encodeURIComponent(verifyUrl)}`
+        : `/verify-email?email=${encodeURIComponent(email)}`;
+      router.push(nextUrl);
     } catch (err: any) {
       setError(err.message || 'Не удалось выполнить регистрацию');
     } finally {

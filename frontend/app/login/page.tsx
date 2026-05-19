@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +36,8 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         const detail = data.detail || 'Ошибка авторизации';
+        const url = typeof data?.verify_url === 'string' ? data.verify_url : null;
+        setVerifyUrl(url);
         if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
           setNeedsVerification(true);
         }
@@ -137,6 +140,17 @@ export default function LoginPage() {
               <p className="text-xs text-white/70">
                 Похоже, почта не подтверждена. Введите email, чтобы отправить письмо ещё раз.
               </p>
+
+              {verifyUrl ? (
+                <a
+                  href={verifyUrl}
+                  className="block text-xs text-white underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Открыть ссылку подтверждения (заглушка)
+                </a>
+              ) : null}
 
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">

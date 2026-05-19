@@ -5,9 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 from psycopg import AsyncConnection
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+# Load `.env` from the project root if present (best-effort).
+load_dotenv(find_dotenv(filename=".env", usecwd=False), override=False)
 
 EMAIL_TOKEN_TYPE = "email_verify"
 

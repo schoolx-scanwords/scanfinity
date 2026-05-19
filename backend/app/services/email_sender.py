@@ -4,9 +4,11 @@ import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+# Load `.env` from the project root if present. This is best-effort and will not
+# override real environment variables set by the process manager.
+load_dotenv(find_dotenv(filename=".env", usecwd=False), override=False)
 
 
 class EmailSendError(RuntimeError):
@@ -23,12 +25,12 @@ def send_email(*, to_email: str, subject: str, body_text: str) -> None:
       SMTP_TIMEOUT (default: 15)
     """
 
-    host = os.getenv("SMTP_HOST")
+    host = os.getenv("SMTP_HOST", "").strip()
     port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("SMTP_FROM")
-    from_name = os.getenv("SMTP_FROM_NAME")
+    user = os.getenv("SMTP_USER", "").strip() or None
+    password = os.getenv("SMTP_PASSWORD", "")
+    from_email = os.getenv("SMTP_FROM", "").strip() or None
+    from_name = os.getenv("SMTP_FROM_NAME", "").strip() or None
     use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
     use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() in {"1", "true", "yes"}
     timeout = float(os.getenv("SMTP_TIMEOUT", "15"))

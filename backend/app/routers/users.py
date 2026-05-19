@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile,
 from fastapi.responses import Response
 
 from database.connect import connect
+from models import UserStatsDTO
 
 
 router = APIRouter(prefix="/api")
@@ -119,3 +120,44 @@ async def get_user_avatar(user_id: int):
         media_type=media_type,
         headers={"Cache-Control": "no-store"},
     )
+
+
+@router.get("/users/me/stats", response_model=UserStatsDTO)
+async def get_my_stats(user_id: int = Depends(get_current_user_id)) -> UserStatsDTO:
+    pool = await connect()
+
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT username, elo, total_games FROM users WHERE id = %s",
+                (int(user_id),),
+            )
+            row = await cur.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            username, elo, total_games = row[0], row[1], row[2]
+
+            # Count games via lobby membership (players -> lobby_players -> games).
+            # Prefer strong identity (players.user_id). As a fallback, also count
+            # rows where an unauthenticated player uses the same display_name.
+            await cur.execute(
+                """
+                SELECT COALESCE(COUNT(DISTINCT g.game_id), 0)
+                FROM players p
+                JOIN lobby_players lp ON lp.player_id = p.id
+                JOIN games g ON g.lobby_id = lp.lobby_id
+                WHERE p.user_id = %s
+                   OR (p.user_id IS NULL AND p.display_name = %s)
+                """,
+                (int(user_id), str(username)),
+            )
+            count_row = await cur.fetchone()
+            computed_games_played = int(count_row[0] if count_row and count_row[0] is not None else 0)
+
+            # Prefer authoritative per-user counter, but keep a computed fallback
+            # for older data paths that created `games` rows.
+            games_played = max(int(total_games or 0), int(computed_games_played or 0))
+
+            return UserStatsDTO(elo=int(elo or 0), games_played=games_played)
