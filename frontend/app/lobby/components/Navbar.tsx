@@ -11,14 +11,14 @@ export default function Navbar() {
     <header
       className="
         w-full
-        h-[88px]
+        h-[72px] md:h-[88px]
         bg-[#0E0128]
         border-b
         border-white/5
         flex
         items-center
         justify-between
-        px-6
+        px-4 md:px-6
       "
     >
       {/* LOGO */}
@@ -27,7 +27,7 @@ export default function Navbar() {
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         transition={{ duration: 0.2 }}
-        className="relative w-[230px] h-[52px] shrink-0"
+        className="relative w-[160px] md:w-[230px] h-[40px] md:h-[52px] shrink-0"
       >
         <Image
           src="/logo/logo.svg"
@@ -39,13 +39,12 @@ export default function Navbar() {
       </motion.button>
 
       {/* USER */}
-      <div className="flex items-center gap-4">
-        <div className="text-right leading-[1.1]">
-          <h2 className="text-white text-[15px] font-semibold">
+      <div className="flex items-center gap-2 md:gap-4">
+        <div className="text-right leading-[1.1] hidden sm:block">
+          <h2 className="text-white text-[13px] md:text-[15px] font-semibold">
             JohnDoe337
           </h2>
-
-          <p className="text-white/50 text-[11px] font-light">
+          <p className="text-white/50 text-[10px] md:text-[11px] font-light">
             johndoe@example.com
           </p>
         </div>
@@ -57,11 +56,11 @@ export default function Navbar() {
           whileTap={{ scale: 0.96 }}
           className="
             relative
-            w-[58px]
-            h-[58px]
+            w-[44px] md:w-[58px]
+            h-[44px] md:h-[58px]
             rounded-full
             overflow-hidden
-            border-[4px]
+            border-[3px] md:border-[4px]
             border-[#754CA8]
           "
         >
