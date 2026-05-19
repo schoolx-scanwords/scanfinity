@@ -1049,171 +1049,46 @@ export default function GamePage() {
   
 return (
     <>
-    <LanguageSwitcher />
-        <main className="relative overflow-hidden h-screen bg-gradient-to-b from-gray-900 to-gray-800">
-          <div className="h-full">
-            <CrosswordPuzzle 
-              puzzleData={{ grid, words, wordCoords, puzzleId }} 
-              onGuessUpdate={handleGuessUpdate} 
-              onCellUpdate={handleCellUpdate} 
-              savedGuesses={myGuessedIds} 
-              savedGridState={myGridStateMap} 
-              onGameOver={onGameComplete} 
-            />
-          </div>
-        
-        {/* Opponents button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsOpponentsOpen(!isOpponentsOpen);
-          }}
-          className="fixed left-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white px-2 py-8 rounded-r-xl shadow-lg transition-all duration-300 z-30"
-          style={{ writingMode: 'vertical-rl' }}
-        >
-          <span className="text-sm font-semibold tracking-wider">
-            {isOpponentsOpen ? '→' : '←'} OPPONENTS
-          </span>
-        </button>
-        
-        {/* Opponents panel */}
-        <div
-          className={`fixed left-0 top-0 h-full w-96 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out z-20 ${
-            isOpponentsOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-6 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-6 pb-3 border-b border-white/20">
-              <h2 className={`${TEXT_STYLES.heading} text-xl font-semibold text-white`}>
-                Players & Scores
-              </h2>
-              <button
-                onClick={() => setIsOpponentsOpen(false)}
-                className="text-white/70 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-              {sortedPlayers.map((player) => {
-                const isCurrentPlayer = player.id === myId;
-                return (
-                  <div
-                    key={player.id}
-                    className={`p-4 rounded-xl transition-all ${
-                      isCurrentPlayer
-                        ? 'bg-gradient-to-r from-purple-600/30 to-purple-800/30 border border-purple-500/50'
-                        : 'bg-white/5 hover:bg-white/10'
-                    } ${player.isAfk ? 'opacity-60' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-white">
-                          {player.name}
-                          {isCurrentPlayer && " (You)"}
-                        </span>
-                        {player.isGuest && (
-                          <span className="text-xs bg-yellow-500/20 text-yellow-200 px-2 py-0.5 rounded">
-                            Guest
-                          </span>
-                        )}
-                        {player.isAfk && (
-                          <span className="text-xs bg-gray-500/20 text-gray-200 px-2 py-0.5 rounded">
-                            AFK
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-purple-400">
-                          {player.score}
-                        </div>
-                        <div className="text-xs text-white/50">
-                          /{totalWords} words
-                        </div>
-                      </div>
-                    </div>
-                    <OpponentView
-                      grid={grid}
-                      wordCoords={wordCoords}
-                      guessedWordIds={player.guessedIds}
-                      size="sm"
-                      isAfk={player.isAfk}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="mt-4 pt-3 border-t border-white/10 text-white/40 text-xs text-center">
-              Sorted by score • Higher is better
-            </div>
-          </div>
-        </div>
-        
-        {/* Chat button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsChatOpen(!isChatOpen);
-          }}
-          className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-l from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white px-3 py-8 rounded-l-xl shadow-lg transition-all duration-300 z-30"
-        >
-          <div className="relative">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"
-                fill="currentColor"
-                className="text-white"
-              />
-              <circle
-                cx="12"
-                cy="10"
-                r="2"
-                fill="white"
-              />
-              <circle
-                cx="7"
-                cy="10"
-                r="2"
-                fill="white"
-              />
-              <circle
-                cx="17"
-                cy="10"
-                r="2"
-                fill="white"
-              />
-            </svg>
-            {chatMessages.length > 0 && !isChatOpen && (
-              <span className="absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
-            )}
-          </div>
-        </button>
-        
-        {/* Chat component */}
-        <div
-          className={`fixed right-0 top-0 h-full w-96 transition-transform duration-300 ease-in-out z-20 ${
-            isChatOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <Chat
-            sendMessage={sendChatMessage}
-            isConnected={isActuallyConnected}
-            username={myName}
-            roomId={roomId}
-            userEmail={myEmail}
-            isGuest={isGuest}
-            messages={chatMessages}
+      <LanguageSwitcher />
+      <main className="relative overflow-hidden h-screen bg-gradient-to-b from-gray-900 to-gray-800">
+        <div className="h-full">
+          <CrosswordPuzzle 
+            puzzleData={{ grid, words, wordCoords, puzzleId }} 
+            onGuessUpdate={handleGuessUpdate} 
+            onCellUpdate={handleCellUpdate} 
+            savedGuesses={myGuessedIds} 
+            savedGridState={myGridStateMap} 
+            onGameOver={onGameComplete} 
           />
         </div>
+      
+        {/* OpponentView - shows ALL players (including current) in toggleable panel */}
+        <OpponentView
+          grid={grid}
+          wordCoords={wordCoords}
+          players={sortedPlayers.map(p => ({
+            id: p.id,
+            name: p.name,
+            guessedIds: p.guessedIds,
+            score: p.score,
+            isAfk: p.isAfk,
+            isGuest: p.isGuest
+          }))}
+          currentPlayerId={myId}
+          totalWords={totalWords}
+          size="sm"
+        />
+        
+        {/* Chat component */}
+        <Chat
+          sendMessage={sendChatMessage}
+          isConnected={isActuallyConnected}
+          username={myName}
+          roomId={roomId}
+          userEmail={myEmail}
+          isGuest={isGuest}
+          messages={chatMessages}
+        />
       </main>
       
       <style jsx>{`

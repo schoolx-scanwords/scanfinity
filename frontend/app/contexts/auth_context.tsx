@@ -7,6 +7,7 @@ interface UserData {
   username: string;
   email: string;
   avatar?: string;
+  isAnonymous?: boolean;
 }
 
 interface AuthContextType {
@@ -15,6 +16,7 @@ interface AuthContextType {
   login: (userData: UserData, token: string) => void;
   updateUser: (updates: Partial<UserData>) => void;
   logout: () => void;
+  setGuest: (guestData: UserData) => void; // Add this
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,8 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('auth_user');
     const token = localStorage.getItem('auth_token');
 
-    // Only proceed for real (non‑anonymous) tokens
-    if (storedUser && token && token !== 'anonymous') {
+    if (storedUser && token) {
       try {
         let userData = JSON.parse(storedUser);
 
@@ -62,14 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // GUARD: Never set a guest/anonymous user as an authenticated user
-        if (!userData.isAnonymous) {
-          setUser(userData);
-        } else {
-          // Clean up guest data
-          localStorage.removeItem('auth_user');
-          localStorage.removeItem('auth_token');
-        }
+        // Allow both anonymous and registered users
+        setUser(userData);
       } catch (error) {
         console.error('Failed to parse user data', error);
         localStorage.removeItem('auth_user');
@@ -100,8 +95,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('auth_token');
   };
 
+  const setGuest = (guestData: UserData) => {
+    // Ensure guest has isAnonymous flag
+    const guest = { ...guestData, isAnonymous: true };
+    // Clear any existing auth session
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    setUser(guest);
+    localStorage.setItem('auth_user', JSON.stringify(guest));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, updateUser, logout, setGuest }}>
       {children}
     </AuthContext.Provider>
   );

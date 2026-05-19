@@ -212,43 +212,42 @@ export default function CrosswordPuzzle({
 
   // Handle mobile input submission
   const handleMobileSubmit = () => {
-    if (!selectedWord || !puzzleId || !wordCoords) return;
+    if (selectedWord === null || !puzzleId || !wordCoords) return;
     
-    // Get the word letters from the input
     const inputWord = mobileInputValue.toUpperCase();
     const expectedLength = getCurrentWordLength();
     
-    // Check if input length matches expected length
     if (inputWord.length !== expectedLength) {
       alert(`Please enter exactly ${expectedLength} letters`);
       return;
     }
     
-    // Find the correct word data
     const currentWordData = wordCoords.find((w: any) => w?.id === selectedWord);
     if (!currentWordData) return;
     
-    // Fill the grid with the typed letters - without causing re-centering
     const newGrid = JSON.parse(JSON.stringify(grid));
     const letters = inputWord.split('');
     let hasChanges = false;
     
+    // Fill in all letters regardless of current state
     currentWordData.coords.forEach(([col, row]: number[], index: number) => {
-      if (index < letters.length && letters[index] && /[A-ZА-ЯЁ]/.test(letters[index])) {
+      if (index < letters.length && letters[index]) {
         const newLetter = letters[index];
-        const currentLetter = newGrid.lines[row]?.cells[col]?.symbol || '';
-        if (currentLetter !== newLetter) {
-          hasChanges = true;
-          if (newGrid.lines[row]?.cells[col]) {
-            newGrid.lines[row].cells[col] = { ...newGrid.lines[row].cells[col], symbol: newLetter };
+        // Always update the cell, even if it already has a letter
+        if (newGrid.lines[row]?.cells[col]) {
+          const currentLetter = newGrid.lines[row].cells[col].symbol || '';
+          if (currentLetter !== newLetter) {
+            hasChanges = true;
           }
+          newGrid.lines[row].cells[col] = { ...newGrid.lines[row].cells[col], symbol: newLetter };
         }
       }
     });
     
+    // Update grid if there are changes
     if (hasChanges) {
       setGrid(newGrid);
-      // Notify parent of cell updates
+      // Notify parent of all cell updates
       currentWordData.coords.forEach(([col, row]: number[], index: number) => {
         if (index < letters.length && letters[index]) {
           if (onCellUpdate) onCellUpdate(row, col, letters[index]);
@@ -256,69 +255,86 @@ export default function CrosswordPuzzle({
       });
     }
     
-    // Always check the puzzle after submission
+    // Check the puzzle after filling
     checkEntirePuzzle();
     
-    // Clear input after submission
+    // Clear input and keep word selected
     setMobileInputValue('');
+    
+    // Optional: Auto-focus back to input for next word
+    setTimeout(() => {
+      if (mobileInputRef.current) {
+        mobileInputRef.current.focus();
+      }
+    }, 100);
   };
 
-  // ORIGINAL WORKING SELECTION LOGIC
+  // COMPLETELY REWRITTEN SELECTION LOGIC - properly handles word ID 0
   const handleMouseClick = (event: React.MouseEvent<HTMLDivElement>, cellId: number[]) => {
     if (isPanning) {
       event.stopPropagation();
       return;
     }
     
-    const word_ids_len = hoveredWordIds?.length;
-    setSelectedWord((prevSelected: number | null) => {
-      let newSelectedWord = prevSelected;
-      if (word_ids_len === 1) {
+    // Get the word IDs at this cell
+    const wordIdsAtCell = hoveredWordIds;
+    
+    if (!wordIdsAtCell || wordIdsAtCell.length === 0) {
+      return;
+    }
+    
+    const wordIdsLength = wordIdsAtCell.length;
+    
+    // Determine the new selected word
+    let newSelectedWordId: number | null = null;
+    
+    if (wordIdsLength === 1) {
+      // Single word at this cell - select it
+      newSelectedWordId = wordIdsAtCell[0];
+      setIsSelected(true);
+    } else if (wordIdsLength === 2) {
+      // Two words intersect here
+      if (isSelected && selectedWord !== null) {
+        // If already selected, toggle between the two words
+        newSelectedWordId = selectedWord === wordIdsAtCell[0] ? wordIdsAtCell[1] : wordIdsAtCell[0];
+      } else {
+        // First time selecting this cell - choose the first word
+        newSelectedWordId = wordIdsAtCell[0];
         setIsSelected(true);
-        newSelectedWord = hoveredWordIds?.[0] !== undefined ? hoveredWordIds[0] : null;
-      } else if (word_ids_len === 2) {
-        if (isSelected && prevSelected !== null) {
-          newSelectedWord = prevSelected === hoveredWordIds?.[0] 
-            ? (hoveredWordIds?.[1] ?? null) 
-            : (hoveredWordIds?.[0] ?? null);
-        } else {
-          setIsSelected(true);
-          newSelectedWord = hoveredWordIds?.[0] ?? null;
-        }
       }
+    }
+    
+    // Update selected word state
+    if (newSelectedWordId !== null) {
+      setSelectedWord(newSelectedWordId);
       
-      if (newSelectedWord !== null && wordCoords && grid) {
-        const word = wordCoords.find((w: any) => w?.id === newSelectedWord);
+      // Update selected cell based on the new word
+      if (wordCoords && grid) {
+        const word = wordCoords.find((w: any) => w?.id === newSelectedWordId);
         if (word?.coords) {
-          const wordInfo = findWordById(newSelectedWord, words);
+          const wordInfo = findWordById(newSelectedWordId, words);
           const sortedCoords = [...word.coords].sort((a: number[], b: number[]) => {
             if (wordInfo?.direction === 'right') return a[0] - b[0];
             else return a[1] - b[1];
           });
+          
+          // Find first empty cell in the word
           const firstEmpty = sortedCoords.find(([col, row]: number[]) => {
             return !grid.lines[row]?.cells[col]?.symbol;
           });
-          if (firstEmpty) setSelectedCell([firstEmpty[1], firstEmpty[0]]);
-          else {
-            const start = findStart(wordCoords, newSelectedWord);
+          
+          if (firstEmpty) {
+            setSelectedCell([firstEmpty[1], firstEmpty[0]]);
+          } else {
+            const start = findStart(wordCoords, newSelectedWordId);
             setSelectedCell([start[1], start[0]]);
           }
         }
-      } else if (newSelectedWord === null && wordCoords && hoveredWordIds && hoveredWordIds[0] !== undefined) {
-        const fallbackWord = hoveredWordIds[0];
-        setIsSelected(true);
-        const start = findStart(wordCoords, fallbackWord);
-        setSelectedCell([start[1], start[0]]);
-        return fallbackWord;
-      } else {
-        const start = findStart(wordCoords ?? [], newSelectedWord ?? -1);
-        setSelectedCell([start[1], start[0]]);
       }
-      return newSelectedWord;
-    });
+    }
   };
 
-  // COMPLETE KEYBOARD HANDLER - FOR PC ONLY
+  // FIXED KEYBOARD HANDLER - works for word index 0
   useEffect(() => {
     if (isMobile) return;
     
@@ -631,7 +647,7 @@ export default function CrosswordPuzzle({
 
   // Floating PC Header Component - Fixed at top
   const FloatingPCHeader = () => {
-    if (isMobile || !selectedWord) return null;
+    if (isMobile || selectedWord === null) return null;
     
     const currentWordData = findWordById(selectedWord, words);
     const wordLength = getCurrentWordLength();
@@ -678,7 +694,7 @@ export default function CrosswordPuzzle({
 
   // Mobile Input Component - Fixed at top (no jerking)
   const FloatingMobileInput = () => {
-    if (!isMobile || !selectedWord) return null;
+    if (!isMobile || selectedWord === null) return null;
     
     const currentWordData = findWordById(selectedWord, words);
     const wordLength = getCurrentWordLength();
@@ -792,7 +808,8 @@ export default function CrosswordPuzzle({
                   if (cell?.item !== 'L') return <div key={col} className="w-12 h-12 sm:w-14 md:w-16" />;
                   const wordIds = findWordsAtCoord(wordCoords, col, row).map((w: any) => w?.id).filter((id: number | undefined): id is number => id !== undefined);
                   const isSelectedCell = selectedCell?.[0] === row && selectedCell?.[1] === col;
-                  const isSelectedWord = isSelected && wordIds.includes(selectedWord ?? -1);
+                  // FIXED: Use !== null check instead of truthiness
+                  const isSelectedWord = isSelected && selectedWord !== null && wordIds.includes(selectedWord);
                   const isHoveredWord = hoveredWordIds !== null && wordIds.includes(hoveredWordIds[0]);
                   const isCorrectWord = correct.some(id => wordIds.includes(id));
                   let bgColor = 'bg-gray-300';

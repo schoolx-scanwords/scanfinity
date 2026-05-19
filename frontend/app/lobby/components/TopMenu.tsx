@@ -24,17 +24,14 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
   const currentIndex = menuItems.findIndex((item) => item.tab === activeTab);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [direction, setDirection] = useState<"left" | "right">("right");
 
   const goPrev = () => {
     const newIndex = currentIndex === 0 ? menuItems.length - 1 : currentIndex - 1;
-    setDirection("left");
     setActiveTab(menuItems[newIndex].tab);
   };
 
   const goNext = () => {
     const newIndex = currentIndex === menuItems.length - 1 ? 0 : currentIndex + 1;
-    setDirection("right");
     setActiveTab(menuItems[newIndex].tab);
   };
 
@@ -53,13 +50,16 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
       setTouchEnd(null);
       return;
     }
+    
     const distance = touchStart - touchEnd;
     const minSwipeDistance = 30;
     
     if (Math.abs(distance) > minSwipeDistance) {
       if (distance > 0) {
+        // Swiped left - go next
         goNext();
       } else {
+        // Swiped right - go prev
         goPrev();
       }
     }
@@ -68,31 +68,86 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
     setTouchEnd(null);
   };
 
+  // Determine animation direction based on tab index change
+  const getAnimationDirection = () => {
+    // This will be calculated during the animation
+    return "right";
+  };
+
   const variants = {
-    right: {
-      initial: { opacity: 0, x: 100 },
-      animate: { opacity: 1, x: 0 },
-      exit: { opacity: 0, x: -100 }
+    enter: (direction: string) => ({
+      x: direction === "right" ? 100 : -100,
+      opacity: 0
+    }),
+    center: {
+      x: 0,
+      opacity: 1
     },
-    left: {
-      initial: { opacity: 0, x: -100 },
-      animate: { opacity: 1, x: 0 },
-      exit: { opacity: 0, x: 100 }
+    exit: (direction: string) => ({
+      x: direction === "right" ? -100 : 100,
+      opacity: 0
+    })
+  };
+
+  // Store the direction for the current swipe
+  const [animationDirection, setAnimationDirection] = useState<"left" | "right">("right");
+
+  // Update direction when tab changes
+  const handleTabChange = (newTab: LobbyTab) => {
+    const newIndex = menuItems.findIndex((item) => item.tab === newTab);
+    const direction = newIndex > currentIndex ? "right" : "left";
+    setAnimationDirection(direction);
+    setActiveTab(newTab);
+  };
+
+  const handlePrev = () => {
+    const newIndex = currentIndex === 0 ? menuItems.length - 1 : currentIndex - 1;
+    setAnimationDirection("left");
+    setActiveTab(menuItems[newIndex].tab);
+  };
+
+  const handleNext = () => {
+    const newIndex = currentIndex === menuItems.length - 1 ? 0 : currentIndex + 1;
+    setAnimationDirection("right");
+    setActiveTab(menuItems[newIndex].tab);
+  };
+
+  const handleTouchEndFixed = () => {
+    if (!touchStart || !touchEnd) {
+      setTouchStart(null);
+      setTouchEnd(null);
+      return;
     }
+    
+    const distance = touchStart - touchEnd;
+    const minSwipeDistance = 30;
+    
+    if (Math.abs(distance) > minSwipeDistance) {
+      if (distance > 0) {
+        // Swiped left - go next
+        handleNext();
+      } else {
+        // Swiped right - go prev
+        handlePrev();
+      }
+    }
+    
+    setTouchStart(null);
+    setTouchEnd(null);
   };
 
   return (
     <>
       {/* ----- МОБИЛЬНАЯ КАРУСЕЛЬ (только на экранах < 768px) ----- */}
-      <div className="block md:hidden w-full bg-[#0E0128] border-b border-white/5 py-4">
+      <div className="block md:hidden w-full bg-transparent py-4">
         <div
           className="relative flex items-center justify-center min-h-[120px]"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          onTouchEnd={handleTouchEndFixed}
         >
           <button
-            onClick={goPrev}
+            onClick={handlePrev}
             className="absolute left-4 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition-all active:scale-95"
             aria-label="Previous"
           >
@@ -100,16 +155,17 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
           </button>
 
           <div className="relative w-[200px] flex justify-center">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait" custom={animationDirection}>
               <motion.div
-                key={activeTab + direction}
-                variants={variants[direction]}
-                initial="initial"
-                animate="animate"
+                key={activeTab}
+                custom={animationDirection}
+                variants={variants}
+                initial="enter"
+                animate="center"
                 exit="exit"
                 transition={{
                   type: "tween",
-                  duration: 0.35,
+                  duration: 0.25,
                   ease: [0.25, 0.1, 0.25, 1]
                 }}
                 className="flex flex-col items-center"
@@ -131,7 +187,7 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
           </div>
 
           <button
-            onClick={goNext}
+            onClick={handleNext}
             className="absolute right-4 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition-all active:scale-95"
             aria-label="Next"
           >
@@ -149,19 +205,19 @@ export default function TopMenu({ activeTab, setActiveTab }: TopMenuProps) {
             return (
               <motion.button
                 key={item.tab}
-                onClick={() => setActiveTab(item.tab)}
+                onClick={() => handleTabChange(item.tab)}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05, duration: 0.4, ease: "easeOut" }}
-                whileHover={{ scale: isActive ? 1.18 : 1.12, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                className={`flex flex-col items-center transition-all duration-150 ${
+                transition={{ delay: index * 0.03, duration: 0.2, ease: "easeOut" }}
+                whileHover={{ scale: isActive ? 1.05 : 1.08, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                className={`flex flex-col items-center transition-all duration-75 ${
                   isActive ? "text-white" : "text-white/75 hover:text-white"
                 }`}
               >
                 <motion.div
-                  animate={{ y: isActive ? -6 : 0, scale: isActive ? 1.15 : 1 }}
-                  transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
+                  animate={{ y: isActive ? -4 : 0, scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
                   className="relative w-[52px] h-[52px]"
                 >
                   <Image src={item.icon} alt={item.title} fill className="object-contain" />

@@ -9,6 +9,7 @@ import CreateGame from "./CreateGame";
 import JoinGame from "./JoinGame";
 import RandomGame from "./RandomGame";
 import RankedButton from "./RankedButton";
+import { LAYOUT_STYLES } from '@/app/styles/theme';
 
 export default function LobbyTabs({
   initialTab,
@@ -19,8 +20,9 @@ export default function LobbyTabs({
     useState<LobbyTab>(initialTab);
 
   return (
-    <main className="min-h-screen bg-[var(--background)]">
-      <div className="flex flex-col gap-5">
+    <main className={`min-h-screen ${LAYOUT_STYLES.container}`}>
+      {/* Add padding-top to account for fixed navbar */}
+      <div className="pt-[72px] md:pt-[88px] flex flex-col gap-5">
         <Navbar />
         <TopMenu
           activeTab={activeTab}

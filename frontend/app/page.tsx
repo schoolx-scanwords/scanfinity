@@ -4,40 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from './contexts/auth_context';
+import { useLanguage } from './contexts/LanguageContext';
 import { COLORS, BUTTON_STYLES, TEXT_STYLES, LAYOUT_STYLES } from '@/app/styles/theme';
 import Button from './components/ui/Button';
 import Input from './components/ui/Input';
 import Card from './components/ui/Card';
+import LanguageSwitcher from './components/LanguageSwitcher';
 
-// Temporary translation function - replace with actual i18n implementation
-const t = (key: string): string => {
-  const translations: Record<string, string> = {
-    'authenticated': 'Authenticated',
-    'anonymous': 'Anonymous',
-    'login': 'Login',
-    'register': 'Register',
-    'username': 'Username',
-    'password': 'Password',
-    'email': 'Email',
-    'logout': 'Logout',
-    'profileBtn': 'Profile',
-    'play': 'Play',
-    'leaders': 'Leaders',
-    'loginBtn': 'Login',
-    'registerBtn': 'Register',
-    'backToLogin': 'Back to Login',
-    'goToLogin': 'Go to Login',
-    'resendVerification': 'Resend Verification',
-    'sending': 'Sending...',
-    'profile': 'Profile'
-  };
-  return translations[key] || key;
-};
-
-// Temporary LanguageSwitcher component - replace with actual implementation
-const LanguageSwitcher = () => {
-  return null;
-};
 
 type ActivePlack = 'authenticated' | 'anonymous';
 type AuthState = 'login' | 'register' | 'profile';
@@ -68,46 +41,22 @@ const saveUsedGuestId = (id: string) => {
   localStorage.setItem('used_guest_ids', JSON.stringify(Array.from(usedIds)));
 };
 
-interface GuestUser {
-  username: string;
-  isAnonymous: boolean;
-  guestId: string;
-  avatar?: string;
-}
-
-const createGuestUser = (): GuestUser => {
-  let uniqueId = generateUniqueGuestId();
-  const usedIds = getUsedGuestIds();
-  let attempts = 0;
-  while (usedIds.has(uniqueId) && attempts < 10) {
-    uniqueId = generateUniqueGuestId();
-    attempts++;
-  }
-  if (usedIds.has(uniqueId)) uniqueId = `${uniqueId}_${Date.now()}`;
-  saveUsedGuestId(uniqueId);
-  const guestUserData: GuestUser = { username: uniqueId, isAnonymous: true, guestId: uniqueId };
-  localStorage.setItem('auth_token', 'anonymous');
-  localStorage.setItem('auth_user', JSON.stringify(guestUserData));
-  sessionStorage.setItem('guest_id', uniqueId);
-  return guestUserData;
-};
-
 export default function UnifiedAuthScreen() {
   const router = useRouter();
-  const { user: authUser, isLoading: authLoading, login, logout } = useAuth();
+  const { user: authUser, isLoading: authLoading, login, logout, setGuest } = useAuth();
+  const { t } = useLanguage();
   const [activePlack, setActivePlack] = useState<ActivePlack>('anonymous');
   const [authState, setAuthState] = useState<AuthState>('login');
-  const [guestUser, setGuestUser] = useState<GuestUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginNeedsVerification, setLoginNeedsVerification] = useState(false);
   const [loginResendLoading, setLoginResendLoading] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
   
   // Register state
   const [regUsername, setRegUsername] = useState('');
@@ -126,31 +75,42 @@ export default function UnifiedAuthScreen() {
   const [regEmailError, setRegEmailError] = useState(false);
   const [regPasswordError, setRegPasswordError] = useState(false);
 
-  const loadGuestUser = () => {
-    const token = localStorage.getItem('auth_token');
-    const userStr = localStorage.getItem('auth_user');
-    if (token === 'anonymous' && userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        if (userData.isAnonymous) {
-          setGuestUser({ username: userData.username, isAnonymous: true, guestId: userData.guestId || userData.username, avatar: userData.avatar });
-          return true;
-        }
-      } catch (e) { console.error(e); }
+  const createAndSetGuest = () => {
+    let uniqueId = generateUniqueGuestId();
+    const usedIds = getUsedGuestIds();
+    let attempts = 0;
+    while (usedIds.has(uniqueId) && attempts < 10) {
+      uniqueId = generateUniqueGuestId();
+      attempts++;
     }
-    return false;
+    if (usedIds.has(uniqueId)) uniqueId = `${uniqueId}_${Date.now()}`;
+    saveUsedGuestId(uniqueId);
+    
+    // Use AuthContext's setGuest method
+    setGuest({
+      username: uniqueId,
+      email: `guest_${uniqueId}@temp.local`,
+      avatar: "/avatars/frog.svg",
+      isAnonymous: true
+    });
   };
 
   useEffect(() => {
     if (authLoading) return;
+    
     if (authUser) {
       setActivePlack('authenticated');
       setAuthState('profile');
-      setGuestUser(null);
     } else {
       setActivePlack('anonymous');
-      const hasGuest = loadGuestUser();
-      if (!hasGuest) setGuestUser(createGuestUser());
+      // Only create guest if no user exists
+      const token = localStorage.getItem('auth_token');
+      const storedUser = localStorage.getItem('auth_user');
+      
+      // Check if guest already exists
+      if (!token || token !== 'anonymous' || !storedUser) {
+        createAndSetGuest();
+      }
       setAuthState('profile');
     }
     setIsInitialized(true);
@@ -173,33 +133,20 @@ export default function UnifiedAuthScreen() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const detail = data.detail || 'Invalid credentials';
-        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) {
-          setLoginNeedsVerification(true);
-          setLoginError('Please verify your email before logging in');
-        } else {
-          throw new Error(detail);
-        }
-        return;
+        const detail = data.detail || t('authError');
+        if (typeof detail === 'string' && detail.toLowerCase().includes('not verified')) setLoginNeedsVerification(true);
+        throw new Error(detail);
       }
       const data = await res.json();
-      
-      // Call the AuthContext login function with user data and token
-      login(
-        { 
-          username: data.user.username || loginUsername, 
-          email: data.user.email || '',
-          id: data.user.id
-        }, 
-        data.access_token
-      );
-      
+      login({ 
+        id: data.user.id,
+        username: data.user.username || loginUsername, 
+        email: data.user.email || '',
+        avatar: data.user.avatar || "/avatars/frog.svg"
+      }, data.access_token);
       setAuthState('profile');
-      setGuestUser(null);
-      setLoginUsername('');
-      setLoginPassword('');
     } catch (err: any) {
-      setLoginError(err.message || 'Invalid credentials');
+      setLoginError(err.message || t('invalidCredentials'));
       highlightInput(setLoginUsernameError);
       highlightInput(setLoginPasswordError);
     } finally {
@@ -218,21 +165,10 @@ export default function UnifiedAuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUsername, email: regEmail, password: regPassword }),
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Registration failed');
-      }
+      if (!res.ok) throw new Error((await res.json()).detail || t('registerError'));
       setRegPendingEmail(regEmail);
-      setRegSuccess('Registration successful! Please check your email to verify your account.');
+      setRegSuccess(t('registerSuccessVerifyEmail'));
       setRegPassword('');
-      setRegUsername('');
-      // Don't clear email so user can resend verification if needed
-      
-      // Auto-switch to login after successful registration
-      setTimeout(() => {
-        setShowRegister(false);
-        setRegSuccess(null);
-      }, 3000);
     } catch (err: any) {
       setRegError(err.message);
       highlightInput(setRegUsernameError);
@@ -254,24 +190,16 @@ export default function UnifiedAuthScreen() {
   };
 
   const handleLoginResend = async () => {
-    if (!loginEmail && !loginUsername) {
-      setLoginError('Please enter your email address');
-      return;
-    }
-    const emailToUse = loginEmail || loginUsername;
     setLoginError(null);
     setLoginResendLoading(true);
     try {
       const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailToUse }),
+        body: JSON.stringify({ email: loginEmail }),
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Failed to resend verification');
-      }
-      setLoginError('Verification email sent! Please check your inbox.');
+      if (!res.ok) throw new Error((await res.json()).detail);
+      setLoginError('Письмо отправлено, проверьте почту');
     } catch (err: any) {
       setLoginError(err.message);
     } finally {
@@ -289,11 +217,8 @@ export default function UnifiedAuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: regPendingEmail }),
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Failed to resend verification');
-      }
-      setRegSuccess('Verification email sent again!');
+      if (!res.ok) throw new Error((await res.json()).detail);
+      setRegSuccess('Письмо отправлено повторно');
     } catch (err: any) {
       setRegError(err.message);
     } finally {
@@ -301,46 +226,27 @@ export default function UnifiedAuthScreen() {
     }
   };
 
-  const handleGuestLogout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    sessionStorage.removeItem('guest_id');
-    setGuestUser(createGuestUser());
+  const handleNewGuest = () => {
+    logout(); // Clear current user/guest
+    createAndSetGuest();
   };
 
-  const handleProfile = () => {
-    if (authUser) router.push('/profile');
-  };
-  
-  const handlePlay = () => {
-    if (authUser) {
-      router.push('/lobby');
-    } else if (guestUser) {
-      router.push('/lobby');
-    } else {
-      setGuestUser(createGuestUser());
-      router.push('/lobby');
-    }
-  };
-  
-  const handleLeaders = () => {
-    console.log('Leaders clicked');
-    // Navigate to leaders page when implemented
-    // router.push('/leaders');
-  };
+  const handleProfile = () => authUser && router.push('/profile');
+  const handlePlay = () => router.push('/lobby');
+  const handleLeaders = () => console.log('Leaders clicked');
 
   const handleLogout = () => {
     logout();
     setAuthState('login');
     setLoginUsername('');
     setLoginPassword('');
-    setLoginEmail('');
-    // Don't clear guest data here - that's handled separately
+    setShowRegister(false);
   };
 
   if (!isInitialized) {
     return (
       <div className={LAYOUT_STYLES.container}>
+        <LanguageSwitcher />
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <div className={TEXT_STYLES.heading}>Loading...</div>
@@ -349,7 +255,8 @@ export default function UnifiedAuthScreen() {
     );
   }
 
-  const isLoggedIn = !!authUser;
+  const isLoggedIn = !!authUser && !authUser.isAnonymous;
+  const isGuest = authUser?.isAnonymous === true;
   const isGuestActive = activePlack === 'anonymous';
   const isAuthActive = activePlack === 'authenticated';
 
@@ -437,68 +344,27 @@ export default function UnifiedAuthScreen() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => {
-                                setShowRegister(true);
-                                setLoginError(null);
-                                setRegError(null);
-                              }}
+                              onClick={() => setShowRegister(true)}
                               className="text-sm sm:text-base text-purple-300 hover:text-purple-100 transition-colors"
                             >
                               {t('register')}
                             </button>
                           </div>
-                          <Input 
-                            type="text" 
-                            value={loginUsername} 
-                            onChange={(e) => {
-                              setLoginUsername(e.target.value);
-                              setLoginEmail(e.target.value);
-                            }} 
-                            placeholder={t('username')} 
-                            error={loginUsernameError} 
-                            variant="login" 
-                          />
-                          <Input 
-                            type="password" 
-                            value={loginPassword} 
-                            onChange={(e) => setLoginPassword(e.target.value)} 
-                            placeholder={t('password')} 
-                            error={loginPasswordError} 
-                            variant="login" 
-                          />
-                          {loginError && (
-                            <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>
-                              {loginError}
-                            </p>
-                          )}
+                          <Input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={t('username')} error={loginUsernameError} variant="login" />
+                          <Input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder={t('password')} error={loginPasswordError} variant="login" />
+                          {loginError && <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>{loginError}</p>}
                           {loginNeedsVerification && (
-                            <button 
-                              type="button" 
-                              onClick={handleLoginResend} 
-                              disabled={loginResendLoading} 
-                              className={BUTTON_STYLES.secondary}
-                            >
+                            <button type="button" onClick={handleLoginResend} disabled={loginResendLoading} className={BUTTON_STYLES.secondary}>
                               {loginResendLoading ? t('sending') : t('resendVerification')}
                             </button>
                           )}
-                          <Button
-                            type="submit"
-                            className="w-full py-2 text-xs sm:text-sm"
-                            disabled={loginLoading}
-                          >
-                            {loginLoading ? 'Logging in...' : t('loginBtn')}
-                          </Button>
                         </form>
                       ) : (
                         <form onSubmit={handleRegister} className="w-full space-y-1.5 sm:space-y-2">
                           <div className="flex justify-between items-center mb-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                setShowRegister(false);
-                                setRegError(null);
-                                setRegSuccess(null);
-                              }}
+                              onClick={() => setShowRegister(false)}
                               className="text-sm sm:text-base text-purple-300 hover:text-purple-100 transition-colors"
                             >
                               {t('backToLogin')}
@@ -507,59 +373,17 @@ export default function UnifiedAuthScreen() {
                               {t('register')}
                             </span>
                           </div>
-                          <Input 
-                            type="text" 
-                            value={regUsername} 
-                            onChange={(e) => setRegUsername(e.target.value)} 
-                            placeholder={t('username')} 
-                            error={regUsernameError} 
-                            variant="register" 
-                          />
-                          <Input 
-                            type="email" 
-                            value={regEmail} 
-                            onChange={(e) => setRegEmail(e.target.value)} 
-                            placeholder={t('email')} 
-                            error={regEmailError} 
-                            variant="register" 
-                          />
-                          <Input 
-                            type="password" 
-                            value={regPassword} 
-                            onChange={(e) => setRegPassword(e.target.value)} 
-                            placeholder={t('password')} 
-                            error={regPasswordError} 
-                            variant="register" 
-                          />
-                          {regSuccess && (
-                            <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>
-                              {regSuccess}
-                            </p>
-                          )}
-                          {regError && (
-                            <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>
-                              {regError}
-                            </p>
-                          )}
+                          <Input type="text" value={regUsername} onChange={(e) => setRegUsername(e.target.value)} placeholder={t('username')} error={regUsernameError} variant="register" />
+                          <Input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder={t('email')} error={regEmailError} variant="register" />
+                          <Input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder={t('password')} error={regPasswordError} variant="register" />
+                          {regSuccess && <p className={`text-[10px] ${COLORS.successText} ${COLORS.successBg} rounded-lg px-2 py-1 text-center`}>{regSuccess}</p>}
+                          {regError && <p className={`text-xs ${COLORS.errorText} ${COLORS.errorBg} rounded-lg px-2 py-1 text-center`}>{regError}</p>}
                           {regPendingEmail && (
                             <div className="space-y-2">
-                              <button 
-                                type="button" 
-                                onClick={handleRegisterResend} 
-                                disabled={regResendLoading} 
-                                className={`w-full ${BUTTON_STYLES.secondary}`}
-                              >
-                                {regResendLoading ? t('sending') : t('resendVerification')}
-                              </button>
+                              <button type="button" onClick={handleRegisterResend} disabled={regResendLoading} className={`w-full ${BUTTON_STYLES.secondary}`}>{regResendLoading ? t('sending') : t('resendVerification')}</button>
+                              <button type="button" onClick={() => setShowRegister(false)} className={`w-full ${BUTTON_STYLES.secondary}`}>{t('goToLogin')}</button>
                             </div>
                           )}
-                          <Button
-                            type="submit"
-                            className="w-full py-2 text-xs sm:text-sm"
-                            disabled={regLoading}
-                          >
-                            {regLoading ? 'Registering...' : t('registerBtn')}
-                          </Button>
                         </form>
                       )}
                     </>
@@ -570,12 +394,12 @@ export default function UnifiedAuthScreen() {
               {/* Anonymous Content */}
               <div className={`absolute inset-0 transition-all duration-500 ${activePlack === 'anonymous' ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                 <div className="absolute inset-0 flex flex-col justify-start px-4 sm:px-[8%] md:px-[12%] pt-14 sm:pt-10 md:pt-16 lg:pt-20 pb-6">
-                  {guestUser ? (
+                  {isGuest ? (
                     <Card className="w-full p-3 sm:p-4 md:p-5">
                       <div className="flex items-center gap-3">
                         <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
-                          {guestUser.avatar ? (
-                            <img src={guestUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                          {authUser.avatar ? (
+                            <img src={authUser.avatar} alt="Profile" className="w-full h-full object-cover" />
                           ) : (
                             <svg className="w-12 h-12 sm:w-16 sm:h-16 text-white/60" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -584,25 +408,22 @@ export default function UnifiedAuthScreen() {
                         </div>
                         <div className="flex-1">
                           <h3 className={`${TEXT_STYLES.heading} text-base sm:text-lg md:text-2xl`}>
-                            {guestUser.username}
+                            {authUser.username}
                             <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-200 px-2 py-0.5 rounded">Guest</span>
                           </h3>
                           <p className={`${TEXT_STYLES.subheading} text-xs sm:text-base md:text-xl text-yellow-400/70`}>Guest Player</p>
-                          <button onClick={handleGuestLogout} className={BUTTON_STYLES.logout}>New Guest</button>
+                          <button onClick={handleNewGuest} className={BUTTON_STYLES.logout}>New Guest</button>
                         </div>
                       </div>
                     </Card>
                   ) : (
-                    <div className="text-center space-y-1">
-                      <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-purple-500 mx-auto"></div>
-                      <div className={`${TEXT_STYLES.subheading} text-[8px] sm:text-[9px]`}>Loading guest profile...</div>
-                    </div>
+                    <div className="text-center">Loading guest...</div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Нижние кнопки */}
+            {/* Bottom Buttons */}
             <div className="mt-4 relative z-50 w-full">
               {isLoggedIn ? (
                 <div className="flex gap-3 w-full">
@@ -632,6 +453,28 @@ export default function UnifiedAuthScreen() {
             </div>
           </div>
         </div>
+      </div>
+      {/* Footer Image */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 z-40"
+        style={{
+          width: '100vw',
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          pointerEvents: 'none'
+        }}
+      >
+        <img 
+          src="/footer.png" 
+          alt="Footer" 
+          style={{
+            width: '100%',
+            height: 'auto',
+            display: 'block'
+          }}
+        />
       </div>
     </div>
   );
