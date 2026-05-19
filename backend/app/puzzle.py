@@ -72,96 +72,115 @@ class Puzzle():
             print(list(''.join(row).replace("0", "_").replace("#", "_").replace("%", "_")))
 
 
-async def get_topic_id(topic_name: str):
+def get_topic_id(topic_name: str):
     """Helper to fetch topic_id by name from the database."""
-    HOST = "localhost"
+    # Use environment variables with Docker service name
+    HOST = os.getenv("POSTGRES_HOST", "postgres")  # Use 'postgres' service name in Docker
     PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-    DB = os.getenv("POSTGRES_DB")
-    USER = os.getenv("POSTGRES_USER")
-    PASSWORD = os.getenv("POSTGRES_PASSWORD")
+    DB = os.getenv("POSTGRES_DB", "scanfinity")
+    USER = os.getenv("POSTGRES_USER", "scanfinity_user")
+    PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
     
-    conn = psycopg.connect(
-        host=HOST,
-        port=PORT,
-        dbname=DB,
-        user=USER,
-        password=PASSWORD
-    )
-    cur = conn.cursor()
-    cur.execute("SELECT topic_id FROM topics WHERE name = %s", (topic_name,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    if row:
-        return row[0]
-    # If topic doesn't exist, create it (optional, but safe)
-    conn = psycopg.connect(
-        host=HOST,
-        port=PORT,
-        dbname=DB,
-        user=USER,
-        password=PASSWORD
-    )
-    cur = conn.cursor()
-    cur.execute("INSERT INTO topics (name) VALUES (%s) RETURNING topic_id", (topic_name,))
-    new_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
-    return new_id
+    if not PASSWORD:
+        print("WARNING: POSTGRES_PASSWORD not set!")
+    
+    print(f"Connecting to database at {HOST}:{PORT} as {USER}")
+    
+    try:
+        conn = psycopg.connect(
+            host=HOST,
+            port=PORT,
+            dbname=DB,
+            user=USER,
+            password=PASSWORD
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT topic_id FROM topics WHERE name = %s", (topic_name,))
+        row = cur.fetchone()
+        cur.close()
+        
+        if row:
+            conn.close()
+            return row[0]
+        
+        # If topic doesn't exist, create it
+        cur = conn.cursor()
+        cur.execute("INSERT INTO topics (name) VALUES (%s) RETURNING topic_id", (topic_name,))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return new_id
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+        raise
 
 
 def insert_puzzle_sync(puzzle_obj):
-    HOST = "localhost"
+    HOST = os.getenv("POSTGRES_HOST", "postgres")
     PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-    DB = os.getenv("POSTGRES_DB")
-    USER = os.getenv("POSTGRES_USER")
-    PASSWORD = os.getenv("POSTGRES_PASSWORD")
+    DB = os.getenv("POSTGRES_DB", "scanfinity")
+    USER = os.getenv("POSTGRES_USER", "scanfinity_user")
+    PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
     
-    conn = psycopg.connect(
-        host=HOST,
-        port=PORT,
-        dbname=DB,
-        user=USER,
-        password=PASSWORD
-    )
-    
-    cur = conn.cursor()
-    puzzle_dict = puzzle_obj.model_dump()
-    
-    # Get topic_id from topic name (string)
-    topic_name = puzzle_dict['topic']   # e.g., "Memes"
-    # Synchronous call – we'll run the async helper in a sync way (for simplicity)
-    import asyncio
-    topic_id = asyncio.run(get_topic_id(topic_name))
-    
-    cur.execute(
-        """
-        INSERT INTO puzzles 
-        INSERT INTO puzzles 
-        (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            puzzle_dict['puzzle_id'],
-            puzzle_dict['lang'],
-            topic_id,                     # now integer
-            puzzle_dict['difficulty'],
-            puzzle_dict['size'],
-            puzzle_dict.get('times_played', 0),
-            Jsonb(puzzle_dict['json'])
+    try:
+        conn = psycopg.connect(
+            host=HOST,
+            port=PORT,
+            dbname=DB,
+            user=USER,
+            password=PASSWORD
         )
-    )
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"Inserted puzzle {puzzle_dict['puzzle_id']}")
+        
+        cur = conn.cursor()
+        puzzle_dict = puzzle_obj.model_dump()
+        
+        # Get topic_id from topic name (string)
+        topic_name = puzzle_dict['topic']
+        topic_id = get_topic_id(topic_name)
+        
+        cur.execute(
+            """
+            INSERT INTO puzzles 
+            (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                puzzle_dict['puzzle_id'],
+                puzzle_dict['lang'],
+                topic_id,
+                puzzle_dict['difficulty'],
+                puzzle_dict['size'],
+                puzzle_dict.get('times_played', 0),
+                Jsonb(puzzle_dict['json'])
+            )
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Inserted puzzle {puzzle_dict['puzzle_id']}")
+        return True
+    except Exception as e:
+        print(f"Error inserting puzzle: {e}")
+        return False
 
 
 if __name__ == "__main__":
-    from models import Puzzle as PZL
+    from pydantic import BaseModel
+    from typing import Optional
     
+    # Define the Pydantic model here
+    class PZL(BaseModel):
+        puzzle_id: int
+        lang: str
+        topic: str
+        difficulty: str
+        size: int
+        times_played: int
+        json: dict
+    
+    # Create and insert puzzle
     pzl = Puzzle(18)
     pzl.insert_word("картошка", 3, 5, True, riddle="самый белорусский овощ")
     pzl.insert_word("морковка", 2, 9, False, "типо зайцы такое едят наверное")
@@ -178,12 +197,15 @@ if __name__ == "__main__":
     pzl_obj = PZL(
         puzzle_id=jsonpzl["id"],
         lang="ru",
-        topic="Memes",               # ← string topic name (must exist in topics table)
+        topic="Memes",
         difficulty="medium",
         size=len(jsonpzl["grid"]),
         times_played=0,
-        jsonb=jsonpzl
+        json=jsonpzl
     )
     
-    insert_puzzle_sync(pzl_obj)
-    print("DONE!")
+    success = insert_puzzle_sync(pzl_obj)
+    if success:
+        print("DONE! Puzzle inserted successfully.")
+    else:
+        print("FAILED! Could not insert puzzle.")
