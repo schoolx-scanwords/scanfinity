@@ -105,156 +105,173 @@ export default function CreateGame() {
             </h2>
           </div>
 
-          {/* SETTINGS */}
-          <div className="flex flex-col gap-8 items-center">
-            {/* Difficulty */}
-            <div className="w-full max-w-[90%]">
-              <label className="text-white text-[22px] mb-2 block">
-                Difficulty:
-              </label>
+       {/* SETTINGS */}
+<div className="flex flex-col gap-8 items-center">
 
-              <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{
-                    width: `${(difficultyIndex / (difficulties.length - 1)) * 100}%`,
-                  }}
-                  transition={{
-                    duration: 0.3,
-                    ease: "easeInOut",
-                  }}
-                />
-              </div>
+  {/* Difficulty */}
+  <div className="w-full max-w-[400px]">
+    <label className="text-white text-[22px] mb-2 block">
+      Difficulty:
+    </label>
 
-              <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {difficulties.map((difficulty, index) => (
-                  <motion.span
-                    key={index}
-                    className={`cursor-pointer ${index === difficultyIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setDifficultyIndex(index)}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {difficulty}
-                  </motion.span>
-                ))}
-              </div>
-            </div>
+    <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() =>
+          setDifficultyIndex((prev) =>
+            prev === 0 ? difficulties.length - 1 : prev - 1
+          )
+        }
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &lt;
+      </motion.button>
 
-            {/* Size */}
-            <div className="w-full max-w-[90%]">
-              <label className="text-white text-[22px] mb-2 block">
-                Size:
-              </label>
+      <motion.span
+        key={difficulties[difficultyIndex]}
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        className="text-[22px] font-semibold"
+      >
+        {difficulties[difficultyIndex]}
+      </motion.span>
 
-              <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{
-                    width: `${(sizeIndex / (sizes.length - 1)) * 100}%`,
-                  }}
-                  transition={{
-                    duration: 0.3,
-                    ease: "easeInOut",
-                  }}
-                />
-              </div>
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() =>
+          setDifficultyIndex((prev) =>
+            prev === difficulties.length - 1 ? 0 : prev + 1
+          )
+        }
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &gt;
+      </motion.button>
+    </div>
+  </div>
 
-              <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {sizes.map((size, index) => (
-                  <motion.span
-                    key={index}
-                    className={`cursor-pointer ${index === sizeIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setSizeIndex(index)}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {size}
-                  </motion.span>
-                ))}
-              </div>
-            </div>
+  {/* Size */}
+  <div className="w-full max-w-[400px]">
+    <label className="text-white text-[22px] mb-2 block">
+      Size:
+    </label>
 
-            {/* Players - Slider */}
-            <div className="w-full max-w-[90%]">
-              <div className="flex justify-between items-baseline mb-2">
-                <label className="text-white text-[22px]">
-                  Players:
-                </label>
-                <span className="text-white text-[28px] font-bold">
-                  {players}
-                </span>
-              </div>
+    <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() =>
+          setSizeIndex((prev) =>
+            prev === 0 ? sizes.length - 1 : prev - 1
+          )
+        }
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &lt;
+      </motion.button>
 
-              {/* Slider track background */}
-              <div className="relative pt-2">
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={players}
-                  onChange={(e) => setPlayers(parseInt(e.target.value))}
-                  className="w-full h-2 bg-[rgba(0,0,0,0.3)] rounded-lg appearance-none cursor-pointer accent-[#00AFFF]"
-                />
-                
-                {/* Tick marks */}
-                <div className="flex justify-between text-white text-[14px] mt-2 px-1 opacity-70">
-                  <span>1</span>
-                  <span>5</span>
-                  <span>10</span>
-                  <span>15</span>
-                  <span>20</span>
-                </div>
-              </div>
-            </div>
+      <motion.span
+        key={sizes[sizeIndex]}
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        className="text-[22px] font-semibold"
+      >
+        {sizes[sizeIndex]}
+      </motion.span>
 
-            {/* Theme */}
-            <div className="relative w-full max-w-[400px]">
-              <label className="text-white text-[22px] mb-2 block">
-                Theme:
-              </label>
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() =>
+          setSizeIndex((prev) =>
+            prev === sizes.length - 1 ? 0 : prev + 1
+          )
+        }
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &gt;
+      </motion.button>
+    </div>
+  </div>
 
-              <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
-                <motion.button
-                  className="text-[20px] font-bold"
-                  onClick={() => changeTheme("prev")}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  &lt;
-                </motion.button>
+  {/* Players */}
+  <div className="w-full max-w-[400px]">
+    <label className="text-white text-[22px] mb-2 block">
+      Players:
+    </label>
 
-                <motion.span
-                  key={themes[themeIndex]}
-                  initial={{
-                    opacity: 0,
-                    y: -5,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 120,
-                    damping: 20,
-                  }}
-                  className="text-[20px] font-medium"
-                >
-                  {themes[themeIndex]}
-                </motion.span>
+    <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() => setPlayers((prev) => (prev <= 1 ? 20 : prev - 1))}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &lt;
+      </motion.button>
 
-                <motion.button
-                  className="text-[20px] font-bold"
-                  onClick={() => changeTheme("next")}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  &gt;
-                </motion.button>
-              </div>
-            </div>
-          </div>
+      <motion.span
+        key={players}
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        className="text-[22px] font-semibold"
+      >
+        {players}
+      </motion.span>
+
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() => setPlayers((prev) => (prev >= 20 ? 1 : prev + 1))}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &gt;
+      </motion.button>
+    </div>
+  </div>
+
+  {/* Theme */}
+  <div className="w-full max-w-[400px]">
+    <label className="text-white text-[22px] mb-2 block">
+      Theme:
+    </label>
+
+    <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() => changeTheme("prev")}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &lt;
+      </motion.button>
+
+      <motion.span
+        key={themes[themeIndex]}
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        className="text-[22px] font-semibold"
+      >
+        {themes[themeIndex]}
+      </motion.span>
+
+      <motion.button
+        className="text-[20px] font-bold"
+        onClick={() => changeTheme("next")}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        &gt;
+      </motion.button>
+    </div>
+  </div>
+</div>
         </div>
 
         {/* CREATE BUTTON */}
