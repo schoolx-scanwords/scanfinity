@@ -38,6 +38,7 @@ interface WaitingRoomProps {
   username?: string;
   isGuest?: boolean;
   onLeaveRoom?: () => void;
+  isRanked?: boolean; // Add this prop
 }
 
 export default function WaitingRoom({
@@ -54,7 +55,8 @@ export default function WaitingRoom({
   isConnected = true,
   username = '',
   isGuest = false,
-  onLeaveRoom
+  onLeaveRoom,
+  isRanked = false // Default to false for non-ranked games
 }: WaitingRoomProps) {
   const router = useRouter();
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -126,7 +128,7 @@ export default function WaitingRoom({
     }
   }, [chatMessages, isChatOpen, isClient]);
   
-  // Timer logic - only runs when room is full
+  // Timer logic - only runs when room is full (for non-ranked games)
   useEffect(() => {
     // Clear existing countdown
     if (countdownIntervalRef.current) {
@@ -134,7 +136,8 @@ export default function WaitingRoom({
       countdownIntervalRef.current = null;
     }
     
-    if (isRoomFull && !allPlayersReady) {
+    // Only start countdown for non-ranked games
+    if (!isRanked && isRoomFull && !allPlayersReady) {
       // Start countdown when room is full but not all ready
       setCountdown(30);
       
@@ -161,20 +164,31 @@ export default function WaitingRoom({
         clearInterval(countdownIntervalRef.current);
       }
     };
-  }, [isRoomFull, allPlayersReady]);
+  }, [isRoomFull, allPlayersReady, isRanked]);
   
-  // Auto-start game when countdown reaches 0 and host is present
+  // Auto-start game when countdown reaches 0 and host is present (only for non-ranked)
   useEffect(() => {
-    if (countdown === 0 && isHost && isRoomFull) {
+    if (!isRanked && countdown === 0 && isHost && isRoomFull) {
       onStartGame();
     }
-  }, [countdown, isHost, isRoomFull, onStartGame]);
+  }, [countdown, isHost, isRoomFull, onStartGame, isRanked]);
   
   // Format room ID for display
   const displayRoomId = roomId.replace(/[{}]/g, '').replace(/\d+$/, '');
   
   // Get status text
   const getStatusText = () => {
+    if (isRanked) {
+      if (!isRoomFull) {
+        return `Waiting for opponent... (${activePlayers.length}/${maxPlayers})`;
+      }
+      if (allPlayersReady) {
+        return "Opponent found! Starting game...";
+      }
+      return "Opponent found! Waiting for both players to ready up...";
+    }
+    
+    // Non-ranked status text
     if (!isRoomFull) {
       return `Waiting for players... (${activePlayers.length}/${maxPlayers})`;
     }
@@ -233,14 +247,23 @@ export default function WaitingRoom({
         {/* Room Info */}
         <div className="text-center mb-8">
           <h1 className={`${TEXT_STYLES.heading} text-3xl font-bold mb-2`}>
-            Game Room
+            {isRanked ? "Ranked Match" : "Game Room"}
           </h1>
-          <p className={`${COLORS.textSecondary} text-sm`}>
-            Room Code: <span className="font-mono text-white">{displayRoomId}</span>
-          </p>
-          <p className={`${COLORS.textTertiary} text-xs mt-2`}>
-            Share this code with friends to join
-          </p>
+          {!isRanked && (
+            <>
+              <p className={`${COLORS.textSecondary} text-sm`}>
+                Room Code: <span className="font-mono text-white">{displayRoomId}</span>
+              </p>
+              <p className={`${COLORS.textTertiary} text-xs mt-2`}>
+                Share this code with friends to join
+              </p>
+            </>
+          )}
+          {isRanked && (
+            <p className={`${COLORS.textSecondary} text-sm mt-2`}>
+              🏆 Competitive Match • ELO Rating at stake
+            </p>
+          )}
         </div>
         
         {/* Status */}
@@ -254,7 +277,7 @@ export default function WaitingRoom({
           <p className="text-sm font-medium">
             {getStatusText()}
           </p>
-          {countdown !== null && !allPlayersReady && (
+          {!isRanked && countdown !== null && !allPlayersReady && (
             <div className="mt-2 text-2xl font-bold">
               {countdown}
             </div>
@@ -294,7 +317,8 @@ export default function WaitingRoom({
                         AFK
                       </span>
                     )}
-                    {player.isHost && (
+                    {/* Only show host badge for non-ranked games */}
+                    {!isRanked && player.isHost && (
                       <span className="text-xs bg-blue-500/20 text-blue-200 px-2 py-0.5 rounded">
                         Host
                       </span>
@@ -327,7 +351,8 @@ export default function WaitingRoom({
             {isReady ? "Cancel Ready" : "Ready Up"}
           </button>
           
-          {isHost && isRoomFull && !allPlayersReady && (
+          {/* Only show Force Start button for non-ranked games AND if user is host */}
+          {!isRanked && isHost && isRoomFull && !allPlayersReady && (
             <button
               onClick={() => {
                 onStartGame();
@@ -349,18 +374,31 @@ export default function WaitingRoom({
         
         {/* Info Text */}
         <div className="mt-6 text-center">
-          <p className={`${COLORS.textTertiary} text-xs`}>
-            {isHost 
-              ? "As host, the game will auto-start when the room is full and everyone is ready"
-              : "Wait for the host to start the game"}
-          </p>
-          <p className={`${COLORS.textTertiary} text-xs mt-2`}>
-            Leaving the room will return you to the lobby
-          </p>
+          {!isRanked ? (
+            <>
+              <p className={`${COLORS.textTertiary} text-xs`}>
+                {isHost 
+                  ? "As host, the game will auto-start when the room is full and everyone is ready"
+                  : "Wait for the host to start the game"}
+              </p>
+              <p className={`${COLORS.textTertiary} text-xs mt-2`}>
+                Leaving the room will return you to the lobby
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`${COLORS.textTertiary} text-xs`}>
+                Both players must ready up to start the ranked match
+              </p>
+              <p className={`${COLORS.textTertiary} text-xs mt-2`}>
+                🏆 Winning increases your ELO rating • Losing decreases it
+              </p>
+            </>
+          )}
         </div>
       </div>
       
-      {/* Chat Toggle Button */}
+      {/* Chat Toggle Button - Only show for non-ranked games or always? Keeping for both for now */}
       <button
         onClick={() => setIsChatOpen(!isChatOpen)}
         className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-l from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white px-2 py-8 rounded-l-xl shadow-lg transition-all duration-300 z-30"

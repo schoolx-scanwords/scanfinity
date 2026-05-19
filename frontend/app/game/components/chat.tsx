@@ -125,6 +125,54 @@ const MessageList = memo(({ messages, username }: { messages: ChatMessage[]; use
 
 MessageList.displayName = 'MessageList';
 
+// Chat Toggle Button Component
+const ChatToggleButton = memo(({ hasUnreadMessages, onToggle, isChatOpen }: { hasUnreadMessages: boolean; onToggle: () => void; isChatOpen: boolean }) => {
+  return (
+    <button
+      onClick={onToggle}
+      className="relative p-2 rounded-lg transition-all bg-white/10 hover:bg-white/20"
+      aria-label="Toggle chat"
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"
+          fill="currentColor"
+          className="text-white/80"
+        />
+        <circle
+          cx="12"
+          cy="10"
+          r="2"
+          fill="white"
+        />
+        <circle
+          cx="7"
+          cy="10"
+          r="2"
+          fill="white"
+        />
+        <circle
+          cx="17"
+          cy="10"
+          r="2"
+          fill="white"
+        />
+      </svg>
+      {hasUnreadMessages && !isChatOpen && (
+        <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
+      )}
+    </button>
+  );
+});
+
+ChatToggleButton.displayName = 'ChatToggleButton';
+
 // Main Chat component - now just composes the subcomponents
 const Chat = memo(function Chat({ 
   sendMessage, 
@@ -135,38 +183,78 @@ const Chat = memo(function Chat({
   isGuest = false,
   messages
 }: ChatProps) {
+  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevMessagesLengthRef = useRef(messages.length);
+  const lastReadMessageIdRef = useRef<string | null>(null);
+
+  // Track unread messages
+  useEffect(() => {
+    if (isChatOpen) {
+      // If chat is open, mark all messages as read
+      if (messages.length > 0) {
+        lastReadMessageIdRef.current = messages[messages.length - 1].id;
+        setUnreadCount(0);
+      }
+    } else {
+      // If chat is closed, check for new messages
+      const currentLastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+      
+      if (prevMessagesLengthRef.current !== messages.length && lastReadMessageIdRef.current !== currentLastMessageId) {
+        // New message arrived while chat is closed
+        setUnreadCount(prev => prev + (messages.length - prevMessagesLengthRef.current));
+      }
+    }
+    
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, isChatOpen]);
+
+  const toggleChat = useCallback(() => {
+    setIsChatOpen(prev => !prev);
+  }, []);
+
   // Stabilize sendMessage to prevent unnecessary re-renders of ChatInput
   const stableSendMessage = useCallback((message: string) => {
     sendMessage(message);
   }, [sendMessage]);
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden will-change-transform">
-      <div className="p-4 border-b border-white/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className={`${TEXT_STYLES.heading} text-lg font-semibold`}>
-              Game Chat
-            </h2>
-            <p className={`${COLORS.textTertiary} text-xs mt-1`}>
-              Chatting as: 
-              <span className={`${COLORS.textPrimary} ml-1 font-medium`}>
-                {username}
-                {isGuest && <span className="text-xs text-yellow-500/70 ml-1">(Guest)</span>}
-              </span>
-            </p>
+    <>
+      <ChatToggleButton 
+        hasUnreadMessages={unreadCount > 0} 
+        onToggle={toggleChat} 
+        isChatOpen={isChatOpen}
+      />
+      
+      {isChatOpen && (
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden will-change-transform">
+          <div className="p-4 border-b border-white/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className={`${TEXT_STYLES.heading} text-lg font-semibold`}>
+                  Game Chat
+                </h2>
+                <p className={`${COLORS.textTertiary} text-xs mt-1`}>
+                  Chatting as: 
+                  <span className={`${COLORS.textPrimary} ml-1 font-medium`}>
+                    {username}
+                    {isGuest && <span className="text-xs text-yellow-500/70 ml-1">(Guest)</span>}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="h-80 overflow-y-auto p-4 space-y-3 bg-black/20">
+            <MessageList messages={messages} username={username} />
+          </div>
+          
+          <div className="p-4 border-t border-white/20">
+            <ChatInput onSendMessage={stableSendMessage} isConnected={isConnected} />
           </div>
         </div>
-      </div>
-      
-      <div className="h-80 overflow-y-auto p-4 space-y-3 bg-black/20">
-        <MessageList messages={messages} username={username} />
-      </div>
-      
-      <div className="p-4 border-t border-white/20">
-        <ChatInput onSendMessage={stableSendMessage} isConnected={isConnected} />
-      </div>
-    </div>
+      )}
+    </>
   );
 }, (prevProps, nextProps) => {
   // Custom comparison - only re-render when messages actually change or username changes

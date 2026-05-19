@@ -19,6 +19,7 @@ export default function RankedWaitingRoom({ onCancel }: RankedWaitingRoomProps) 
   const startTimeRef = useRef<number>(Date.now());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasRedirectedRef = useRef<boolean>(false);
 
   const playerId = String(user?.id || user?.username || "");
   const playerName = user?.username || "Player";
@@ -73,7 +74,12 @@ export default function RankedWaitingRoom({ onCancel }: RankedWaitingRoomProps) 
       
       else if (data.type === "match_found") {
         console.log("Match found! Room ID:", data.room_id);
-        // Match found! Redirect to game room
+        
+        // Prevent multiple redirects
+        if (hasRedirectedRef.current) return;
+        hasRedirectedRef.current = true;
+        
+        // Clear intervals
         if (timerRef.current) {
           clearInterval(timerRef.current);
         }
@@ -85,8 +91,8 @@ export default function RankedWaitingRoom({ onCancel }: RankedWaitingRoomProps) 
         localStorage.setItem("ranked_match_room", data.room_id);
         localStorage.setItem("ranked_opponent", JSON.stringify(data.opponent));
         
-        // Close WebSocket
-        ws.close();
+        // DO NOT close the WebSocket here! Let it close naturally when the component unmounts
+        // The server will keep the connection alive
         
         // Redirect to game
         router.push(`/game?room=${encodeURIComponent(data.room_id)}&ranked=true`);
@@ -136,7 +142,8 @@ export default function RankedWaitingRoom({ onCancel }: RankedWaitingRoomProps) 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      // Only close if we haven't redirected
+      if (wsRef.current?.readyState === WebSocket.OPEN && !hasRedirectedRef.current) {
         wsRef.current.close();
       }
     };

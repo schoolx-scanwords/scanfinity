@@ -165,6 +165,7 @@ export default function GamePage() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   // null = verifying room, true = valid, false = invalid (will redirect)
   const [isRoomValid, setIsRoomValid] = useState<boolean | null>(null);
+  const [isRanked, setIsRanked] = useState<boolean>(false); // Add state for ranked
   
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isOpponentsOpen, setIsOpponentsOpen] = useState(false);
@@ -303,6 +304,13 @@ export default function GamePage() {
   useEffect(() => {
     setIsClient(true);
     mountedRef.current = true;
+    
+    // Check URL params for ranked flag
+    const urlParams = new URLSearchParams(window.location.search);
+    const rankedParam = urlParams.get('ranked');
+    if (rankedParam === 'true') {
+      setIsRanked(true);
+    }
     
     return () => {
       mountedRef.current = false;
@@ -512,6 +520,16 @@ export default function GamePage() {
     if (isLeavingRef.current) return;
     isLeavingRef.current = true;
     
+    // If this is a ranked game, notify the matchmaking server
+    const urlParams = new URLSearchParams(window.location.search);
+    const isRanked = urlParams.get('ranked') === 'true';
+    
+    if (isRanked && roomId) {
+      // Send message through matchmaking WebSocket (you'll need to store its reference)
+      // Or just rely on the WebSocket disconnect handler
+      console.log('Player leaving ranked game:', myName);
+    }
+    
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'leave',
@@ -526,7 +544,7 @@ export default function GamePage() {
     }
     
     router.push('/lobby');
-  }, [router, myId]);
+  }, [router, myId, roomId, myName]);
   
   // Extract lobby ID from room string and set roomId
   useEffect(() => {
@@ -580,7 +598,7 @@ export default function GamePage() {
         type: 'join',
         playerId: myId,
         sessionId: sessionId,
-        deviceId: getDeviceId(),  // Add this line
+        deviceId: getDeviceId(),
         name: myName,
         email: myEmail,
         isGuest: isGuest,
@@ -590,6 +608,13 @@ export default function GamePage() {
         joinTime: Date.now(),
         requestChatHistory: true
       }));
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+              type: 'joined_game',
+              playerId: myId
+          }));
+      }
       hasJoinedRef.current = true;
       isConnectingRef.current = false;
     };
@@ -962,8 +987,7 @@ export default function GamePage() {
     return (
       <>
         <LanguageSwitcher />
-        <GameOver
-          winnerId={gameWinner?.id}
+        <GameOver          winnerId={gameWinner?.id}
           winnerName={gameWinner?.name}
           playerScore={playerFinalScore}
           opponentScore={opponentFinalScore}
@@ -1007,6 +1031,7 @@ export default function GamePage() {
         username={myName}
         isGuest={isGuest}
         onLeaveRoom={handleLeaveRoom}
+        isRanked={isRanked} // Pass the ranked flag
       />
     );
   }
@@ -1022,17 +1047,11 @@ export default function GamePage() {
   const totalWords = wordCoords.length;
   const sortedPlayers = getSortedPlayers();
   
-  return (
+return (
     <>
-      <LanguageSwitcher />
-      <main className={`${LAYOUT_STYLES.container} relative overflow-hidden`}>
-        <div className="max-w-full mx-auto p-6">
-          <div className="mb-6 flex justify-center gap-3">
-            <ConnectionStatus {...connectionStatusProps} />
-            <button onClick={resetProgress} className="bg-red-500/20 text-red-200 px-4 py-2 rounded-lg text-sm hover:bg-red-500/30 transition-all">Reset Progress</button>
-          </div>
-          
-          <div className="flex justify-center items-center">
+    <LanguageSwitcher />
+        <main className="relative overflow-hidden h-screen bg-gradient-to-b from-gray-900 to-gray-800">
+          <div className="h-full">
             <CrosswordPuzzle 
               puzzleData={{ grid, words, wordCoords, puzzleId }} 
               onGuessUpdate={handleGuessUpdate} 
@@ -1042,8 +1061,8 @@ export default function GamePage() {
               onGameOver={onGameComplete} 
             />
           </div>
-        </div>
         
+        {/* Opponents button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1057,6 +1076,7 @@ export default function GamePage() {
           </span>
         </button>
         
+        {/* Opponents panel */}
         <div
           className={`fixed left-0 top-0 h-full w-96 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out z-20 ${
             isOpponentsOpen ? 'translate-x-0' : '-translate-x-full'
@@ -1132,121 +1152,67 @@ export default function GamePage() {
           </div>
         </div>
         
+        {/* Chat button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             setIsChatOpen(!isChatOpen);
           }}
-          className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-l from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white px-2 py-8 rounded-l-xl shadow-lg transition-all duration-300 z-30"
-          style={{ writingMode: 'vertical-rl' }}
+          className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-l from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white px-3 py-8 rounded-l-xl shadow-lg transition-all duration-300 z-30"
         >
-          <span className="text-sm font-semibold tracking-wider">
-            {isChatOpen ? '←' : '→'} CHAT
-          </span>
+          <div className="relative">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"
+                fill="currentColor"
+                className="text-white"
+              />
+              <circle
+                cx="12"
+                cy="10"
+                r="2"
+                fill="white"
+              />
+              <circle
+                cx="7"
+                cy="10"
+                r="2"
+                fill="white"
+              />
+              <circle
+                cx="17"
+                cy="10"
+                r="2"
+                fill="white"
+              />
+            </svg>
+            {chatMessages.length > 0 && !isChatOpen && (
+              <span className="absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
+            )}
+          </div>
         </button>
         
+        {/* Chat component */}
         <div
-          className={`fixed right-0 top-0 h-full w-96 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out z-20 ${
+          className={`fixed right-0 top-0 h-full w-96 transition-transform duration-300 ease-in-out z-20 ${
             isChatOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
-          onClick={(e) => e.stopPropagation()}
         >
-          <div className="h-full flex flex-col">
-            <div className="p-4 border-b border-white/20 flex justify-between items-center">
-              <div>
-                <h2 className={`${TEXT_STYLES.heading} text-lg font-semibold text-white`}>
-                  Game Chat
-                </h2>
-                <p className={`${COLORS.textTertiary} text-xs mt-1`}>
-                  Chatting as: 
-                  <span className={`${COLORS.textPrimary} ml-1 font-medium`}>
-                    {myName}
-                    {isGuest && <span className="text-xs text-yellow-500/70 ml-1">(Guest)</span>}
-                  </span>
-                </p>
-              </div>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="text-white/70 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-black/20">
-              <div className="space-y-3">
-                {chatMessages.map((msg) => {
-                  const isOwnMessage = msg.username === myName;
-                  return (
-                    <div key={msg.id} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] ${isOwnMessage ? 'items-end' : 'items-start'}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-semibold ${isOwnMessage ? 'text-green-400' : 'text-blue-400'}`}>
-                            {msg.username}
-                            {msg.isGuest && <span className="text-xs text-yellow-500/70 ml-1">(Guest)</span>}
-                          </span>
-                          <span className="text-xs text-white/40">
-                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className={`px-3 py-2 text-sm text-white break-words ${
-                          isOwnMessage 
-                            ? 'bg-green-500/20 rounded-lg rounded-tr-none' 
-                            : 'bg-white/10 rounded-lg rounded-tl-none'
-                        }`}>
-                          {msg.message}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {chatMessages.length === 0 && (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-white/50 text-center">
-                      <p className="text-sm mb-1">💬 No messages yet</p>
-                      <p className="text-xs">Be the first to say hi!</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-white/20">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  id="chat-input"
-                  placeholder={isActuallyConnected ? "Type a message..." : "Connecting..."}
-                  disabled={!isActuallyConnected}
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed bg-black/40 text-white border-gray-600 focus:ring-purple-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const input = e.target as HTMLInputElement;
-                      if (input.value.trim() && isActuallyConnected) {
-                        sendChatMessage(input.value.trim());
-                        input.value = '';
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    const input = document.getElementById('chat-input') as HTMLInputElement;
-                    if (input.value.trim() && isActuallyConnected) {
-                      sendChatMessage(input.value.trim());
-                      input.value = '';
-                    }
-                  }}
-                  disabled={!isActuallyConnected}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-[#754CA880] hover:bg-[#754CA8] text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
+          <Chat
+            sendMessage={sendChatMessage}
+            isConnected={isActuallyConnected}
+            username={myName}
+            roomId={roomId}
+            userEmail={myEmail}
+            isGuest={isGuest}
+            messages={chatMessages}
+          />
         </div>
       </main>
       
