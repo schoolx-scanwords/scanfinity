@@ -23,10 +23,7 @@ export default function CreateGame() {
 
   const changeTheme = (direction: "prev" | "next") => {
     setThemeIndex((prev) => {
-      if (direction === "prev") {
-        return prev === 0 ? themes.length - 1 : prev - 1;
-      }
-
+      if (direction === "prev") return prev === 0 ? themes.length - 1 : prev - 1;
       return prev === themes.length - 1 ? 0 : prev + 1;
     });
   };
@@ -67,10 +64,7 @@ export default function CreateGame() {
           const next = Array.isArray(parsed) ? parsed : [];
           if (!next.includes(baseId)) next.push(baseId);
           localStorage.setItem("my_lobby_ids", JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-
+        } catch {}
         localStorage.setItem("last_room", baseId);
         localStorage.setItem("room_max_players", String(players));
         localStorage.setItem("lobby_difficulty", difficulties[difficultyIndex]);
@@ -85,201 +79,85 @@ export default function CreateGame() {
   };
 
   return (
-    <section className="flex flex-col items-center px-6 pb-12">
+    <section className="flex flex-col items-center px-4 md:px-6 pb-16 md:pb-12">
       <div className="relative w-full max-w-[1140px]">
         {/* SETTINGS PANEL */}
-        <div className="rounded-[42px] bg-[var(--panel)] px-8 pt-8 pb-16 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
+        <div className="rounded-[32px] md:rounded-[42px] bg-[var(--panel)] px-5 md:px-8 pt-6 md:pt-8 pb-12 md:pb-16 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
           {/* HEADER */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <div className="relative w-[44px] h-[44px]">
-              <Image
-                src="/icons/create.svg"
-                alt="Create Game"
-                fill
-                className="object-contain"
-              />
+          <div className="flex items-center justify-center gap-3 md:gap-4 mb-6 md:mb-8">
+            <div className="relative w-[36px] md:w-[44px] h-[36px] md:h-[44px]">
+              <Image src="/icons/create.svg" alt="Create Game" fill className="object-contain" />
             </div>
-
-            <h2 className="text-[42px] text-white">
-              Create Game:
-            </h2>
+            <h2 className="text-[32px] md:text-[42px] text-white">Create Game:</h2>
           </div>
 
           {/* SETTINGS */}
-          <div className="flex flex-col gap-8 items-center">
+          <div className="flex flex-col gap-6 md:gap-8 items-center">
             {/* Difficulty */}
-            <div className="w-full max-w-[90%]">
-              <label className="text-white text-[22px] mb-2 block">
-                Difficulty:
-              </label>
-
-              <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{
-                    width: `${(difficultyIndex / (difficulties.length - 1)) * 100}%`,
-                  }}
-                  transition={{
-                    duration: 0.3,
-                    ease: "easeInOut",
-                  }}
-                />
-              </div>
-
-              <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {difficulties.map((difficulty, index) => (
-                  <motion.span
-                    key={index}
-                    className={`cursor-pointer ${index === difficultyIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setDifficultyIndex(index)}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {difficulty}
-                  </motion.span>
-                ))}
+            <div className="w-full max-w-[90%] md:max-w-[400px]">
+              <label className="text-white text-[18px] md:text-[22px] mb-1 md:mb-2 block">Difficulty:</label>
+              <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+                <motion.button className="text-[20px] font-bold" onClick={() => setDifficultyIndex((prev) => (prev === 0 ? difficulties.length - 1 : prev - 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&lt;</motion.button>
+                <motion.span key={difficulties[difficultyIndex]} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-[20px] md:text-[22px] font-semibold">{difficulties[difficultyIndex]}</motion.span>
+                <motion.button className="text-[20px] font-bold" onClick={() => setDifficultyIndex((prev) => (prev === difficulties.length - 1 ? 0 : prev + 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&gt;</motion.button>
               </div>
             </div>
 
             {/* Size */}
-            <div className="w-full max-w-[90%]">
-              <label className="text-white text-[22px] mb-2 block">
-                Size:
-              </label>
-
-              <div className="relative h-3 bg-[rgba(0,0,0,0.3)] rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute top-0 left-0 h-3 bg-white rounded-full"
-                  animate={{
-                    width: `${(sizeIndex / (sizes.length - 1)) * 100}%`,
-                  }}
-                  transition={{
-                    duration: 0.3,
-                    ease: "easeInOut",
-                  }}
-                />
-              </div>
-
-              <div className="flex justify-between text-white text-[18px] mt-1 px-1">
-                {sizes.map((size, index) => (
-                  <motion.span
-                    key={index}
-                    className={`cursor-pointer ${index === sizeIndex ? "font-semibold" : "font-normal"}`}
-                    onClick={() => setSizeIndex(index)}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {size}
-                  </motion.span>
-                ))}
+            <div className="w-full max-w-[90%] md:max-w-[400px]">
+              <label className="text-white text-[18px] md:text-[22px] mb-1 md:mb-2 block">Size:</label>
+              <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+                <motion.button className="text-[20px] font-bold" onClick={() => setSizeIndex((prev) => (prev === 0 ? sizes.length - 1 : prev - 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&lt;</motion.button>
+                <motion.span key={sizes[sizeIndex]} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-[20px] md:text-[22px] font-semibold">{sizes[sizeIndex]}</motion.span>
+                <motion.button className="text-[20px] font-bold" onClick={() => setSizeIndex((prev) => (prev === sizes.length - 1 ? 0 : prev + 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&gt;</motion.button>
               </div>
             </div>
 
-            {/* Players - Slider */}
-            <div className="w-full max-w-[90%]">
-              <div className="flex justify-between items-baseline mb-2">
-                <label className="text-white text-[22px]">
-                  Players:
-                </label>
-                <span className="text-white text-[28px] font-bold">
-                  {players}
-                </span>
-              </div>
-
-              {/* Slider track background */}
-              <div className="relative pt-2">
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={players}
-                  onChange={(e) => setPlayers(parseInt(e.target.value))}
-                  className="w-full h-2 bg-[rgba(0,0,0,0.3)] rounded-lg appearance-none cursor-pointer accent-[#00AFFF]"
-                />
-                
-                {/* Tick marks */}
-                <div className="flex justify-between text-white text-[14px] mt-2 px-1 opacity-70">
-                  <span>1</span>
-                  <span>5</span>
-                  <span>10</span>
-                  <span>15</span>
-                  <span>20</span>
-                </div>
+            {/* Players */}
+            <div className="w-full max-w-[90%] md:max-w-[400px]">
+              <label className="text-white text-[18px] md:text-[22px] mb-1 md:mb-2 block">Players:</label>
+              <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
+                <motion.button className="text-[20px] font-bold" onClick={() => setPlayers((prev) => (prev <= 1 ? 20 : prev - 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&lt;</motion.button>
+                <motion.span key={players} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-[20px] md:text-[22px] font-semibold">{players}</motion.span>
+                <motion.button className="text-[20px] font-bold" onClick={() => setPlayers((prev) => (prev >= 20 ? 1 : prev + 1))} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&gt;</motion.button>
               </div>
             </div>
 
             {/* Theme */}
-            <div className="relative w-full max-w-[400px]">
-              <label className="text-white text-[22px] mb-2 block">
-                Theme:
-              </label>
-
+            <div className="w-full max-w-[90%] md:max-w-[400px]">
+              <label className="text-white text-[18px] md:text-[22px] mb-1 md:mb-2 block">Theme:</label>
               <div className="flex items-center justify-between bg-[rgba(0,0,0,0.3)] rounded-[20px] px-4 py-2 text-white">
-                <motion.button
-                  className="text-[20px] font-bold"
-                  onClick={() => changeTheme("prev")}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  &lt;
-                </motion.button>
-
-                <motion.span
-                  key={themes[themeIndex]}
-                  initial={{
-                    opacity: 0,
-                    y: -5,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 120,
-                    damping: 20,
-                  }}
-                  className="text-[20px] font-medium"
-                >
-                  {themes[themeIndex]}
-                </motion.span>
-
-                <motion.button
-                  className="text-[20px] font-bold"
-                  onClick={() => changeTheme("next")}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  &gt;
-                </motion.button>
+                <motion.button className="text-[20px] font-bold" onClick={() => changeTheme("prev")} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&lt;</motion.button>
+                <motion.span key={themes[themeIndex]} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-[20px] md:text-[22px] font-semibold">{themes[themeIndex]}</motion.span>
+                <motion.button className="text-[20px] font-bold" onClick={() => changeTheme("next")} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>&gt;</motion.button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* CREATE BUTTON */}
-        <motion.button
-          className="
-            absolute
-            left-1/2
-            -bottom-20
-            -translate-x-1/2
-            bg-[#00AFFF]
-            text-white
-            px-14
-            py-4
-            rounded-full
-            text-[24px]
-            font-semibold
-            hover:bg-[#0099dd]
-            transition-colors
-          "
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleCreate}
-        >
-          Create
-        </motion.button>
+        {/* CREATE BUTTON — центрирование через flex, без absolute */}
+        <div className="flex justify-center mt-16 md:mt-20">
+          <motion.button
+            className="
+              bg-transparent
+              border-2 border-white
+              text-white
+              px-10 md:px-14
+              py-3 md:py-4
+              rounded-full
+              text-[20px] md:text-[24px]
+              font-semibold
+              hover:bg-white/10
+              transition-all
+              whitespace-nowrap
+            "
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleCreate}
+          >
+            Create
+          </motion.button>
+        </div>
       </div>
     </section>
   );

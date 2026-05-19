@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from './contexts/auth_context';
@@ -11,6 +11,13 @@ export const metadata: Metadata = {
   description: 'Test your vocabulary with engaging crossword puzzles',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: true,
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -19,7 +26,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* No navbar - just  the content */}
         <main className="min-h-screen">
           <AuthProvider>
             <LanguageProvider>

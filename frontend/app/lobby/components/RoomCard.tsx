@@ -29,6 +29,7 @@ export default function RoomCard({
   onDelete,
 }: RoomCardProps) {
   const router = useRouter();
+
   const isFull = players >= maxPlayers;
   const safeAvatar = avatar && avatar.trim() !== "" ? avatar : "/avatars/frog.svg";
 
@@ -59,58 +60,96 @@ export default function RoomCard({
       tabIndex={0}
       onClick={handleOpen}
       onKeyDown={handleKeyDown}
-      whileHover={{ scale: 1.012, y: -2 }}
+      whileHover={{ scale: 1.005 }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.18 }}
-      className="relative w-full min-h-[102px] rounded-[28px] overflow-hidden flex items-center px-10 text-white shadow-[0_8px_20px_rgba(0,0,0,0.14)]"
+      className="
+        relative
+        w-full
+        rounded-[22px]
+        bg-white/5
+        backdrop-blur-sm
+        border
+        border-white/5
+        px-3 md:px-8
+        py-2 md:py-4
+        text-white
+        flex
+        items-center
+        gap-2 md:gap-4
+        shadow-[0_8px_20px_rgba(0,0,0,0.08)]
+        hover:bg-white/[0.07]
+        transition-all
+        duration-200
+      "
     >
-      <div className="absolute inset-0 -z-10 rounded-[28px] overflow-hidden">
-        <Image src="/icons/roomcards.svg" alt="Room Background" fill className="object-cover" />
+      {/* ROOM ID */}
+      <div className="shrink-0 min-w-[60px] md:min-w-[130px]">
+        <span className="text-[16px] md:text-[22px] font-medium">№{id}</span>
       </div>
 
-      <div className="w-[190px] shrink-0">
-        <span className="text-[28px] font-medium ml-4 block">№{id}</span>
-      </div>
-
-      <div className="w-px h-[54px] bg-white/15 shrink-0 mr-8" />
-
-      <div className="flex items-center gap-3 w-[140px] shrink-0">
-        <div className="relative w-[22px] h-[22px]">
-          <Image src="/icons/people.svg" alt="Players" fill className="object-contain" />
+      {/* PLAYERS */}
+      <div className="flex items-center gap-1 md:gap-2 shrink-0">
+        <div className="relative w-[14px] md:w-[18px] h-[14px] md:h-[18px]">
+          <Image
+            src="/icons/people.svg"
+            alt="Players"
+            fill
+            className="object-contain opacity-80"
+          />
         </div>
-        <span className={`text-[24px] font-medium ${isFull ? "text-red-300" : "text-white"}`}>
+        <span
+          className={`text-[14px] md:text-[20px] font-medium ${
+            isFull ? "text-red-300" : "text-white"
+          }`}
+        >
           {players}/{maxPlayers}
         </span>
       </div>
 
-      <div className="flex-1 text-left text-[26px] font-medium">{category}</div>
-
-      <div className="flex items-center w-[340px] shrink-0">
-        <div className="flex items-center gap-4 overflow-hidden">
-          <div className="relative w-[58px] h-[58px] rounded-full overflow-hidden shrink-0">
-            <Image src={safeAvatar} alt={owner} fill className="object-cover" />
-          </div>
-          <span className="text-[24px] truncate" title={owner}>
-            {owner}
-          </span>
-          {isPremium ? (
-            <Star size={18} fill="#FFD93B" color="#FFD93B" className="shrink-0" />
-          ) : null}
-        </div>
+      {/* CATEGORY */}
+      <div className="flex-1 text-[14px] md:text-[22px] font-medium truncate min-w-0">
+        {category}
       </div>
 
-      {canDelete ? (
-        <button
-          type="button"
-          onClick={handleDeleteClick}
-          className="absolute top-3 right-3 p-2 rounded-full bg-black/25 hover:bg-black/35"
-          aria-label="Delete lobby"
-        >
-          <Trash2 size={18} className="text-white/90" />
-        </button>
-      ) : null}
+      {/* OWNER */}
+      <div className="flex items-center gap-1 md:gap-3 shrink-0 max-w-[100px] md:max-w-none overflow-hidden">
+        {/* Аватар виден только на десктопе */}
+        <div className="hidden md:block relative w-[46px] h-[46px] rounded-full overflow-hidden shrink-0">
+          <Image src={safeAvatar} alt={owner} fill className="object-cover" />
+        </div>
 
-      <ChevronRight size={40} className="text-white/70 shrink-0 ml-auto" />
+        <span
+          className="text-[13px] md:text-[20px] truncate"
+          title={owner}
+        >
+          {owner}
+        </span>
+
+        {isPremium && (
+          <Star
+            size={14}
+            fill="#FFD93B"
+            color="#FFD93B"
+            className="shrink-0 hidden md:inline-block"
+          />
+        )}
+      </div>
+
+      {/* DELETE + ARROW */}
+      <div className="flex items-center gap-1 md:gap-2 shrink-0">
+        {canDelete && (
+          <button
+            type="button"
+            onClick={handleDeleteClick}
+            className="p-1 md:p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+            aria-label="Delete lobby"
+          >
+            <Trash2 size={14} className="text-white/70 md:w-[17px] md:h-[17px]" />
+          </button>
+        )}
+        <ChevronRight size={20} className="text-white/50 shrink-0 md:w-[34px] md:h-[34px]" />
+      </div>
     </motion.div>
   );
 }
