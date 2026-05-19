@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../contexts/auth_context";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { getOrCreateDeviceId } from "../../lib/device";
+import { getGuestDisplayName } from "../../lib/guest";
 
 const difficulties = ["Easy", "Medium", "Hard"];
 const sizes = [20, 30, 40];
@@ -32,7 +33,7 @@ export default function CreateGame() {
   };
 
   const handleCreate = async () => {
-    const owner = user?.username || "Guest";
+    const owner = user?.username || getGuestDisplayName() || "Guest";
     const deviceId = getOrCreateDeviceId();
 
     try {

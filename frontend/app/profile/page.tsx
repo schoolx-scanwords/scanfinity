@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import Navbar from "@/app/lobby/components/Navbar";
 import { useAuth } from "@/app/contexts/auth_context";
+import { isGuestToken } from "@/app/lib/guest";
 
 const decodeJwtSub = (token: string): string | null => {
   try {
@@ -58,7 +59,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
     if (!user) return;
-    if (!token || token === "anonymous") return;
+    if (!token || isGuestToken(token)) return;
 
     const controller = new AbortController();
     setStatsLoading(true);
@@ -134,7 +135,7 @@ export default function ProfilePage() {
     // Persist for authenticated users.
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-      if (!token || token === "anonymous") {
+      if (!token || isGuestToken(token)) {
         return;
       }
 

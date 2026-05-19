@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { isGuestToken } from '../lib/guest';
 
 interface UserData {
   id?: string | number;
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('auth_token');
 
     // Only proceed for real (non‑anonymous) tokens
-    if (storedUser && token && token !== 'anonymous') {
+    if (storedUser && token && !isGuestToken(token)) {
       try {
         let userData = JSON.parse(storedUser);
 

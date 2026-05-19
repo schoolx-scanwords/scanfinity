@@ -9,6 +9,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { COLORS, BUTTON_STYLES, TEXT_STYLES, LAYOUT_STYLES } from '../styles/theme';
 import Input from '../components/ui/Input';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { createGuestToken } from '../lib/guest';
 
 // Generate a unique guest ID
 const generateUniqueGuestId = (): string => {
@@ -145,7 +146,7 @@ export default function GameAuthPage() {
     saveUsedGuestId(uniqueId);
     
     // Store guest info
-    localStorage.setItem('auth_token', 'anonymous');
+    localStorage.setItem('auth_token', createGuestToken(uniqueId));
     localStorage.setItem('auth_user', JSON.stringify({ 
       username: uniqueId,
       isAnonymous: true,

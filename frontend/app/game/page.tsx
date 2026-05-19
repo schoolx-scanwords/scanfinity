@@ -12,6 +12,7 @@ import Chat from './components/chat';
 import WaitingRoom from './components/WaitingRoom';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import GameOver from './components/GameOver';
+import { isGuestToken } from '../lib/guest';
 
 interface Player {
   id: string;
@@ -134,9 +135,9 @@ const getUserInfoFromStorage = () => {
   if (!token || !userStr) return null;
   try {
     const userData = JSON.parse(userStr);
-    const isGuest = token === 'anonymous';
+    const isGuest = isGuestToken(token) || !!userData?.isAnonymous;
     return {
-      id: isGuest ? userData.username : (userData.id || userData.username),
+      id: isGuest ? (userData.guestId || userData.username) : (userData.id || userData.username),
       name: userData.username,
       email: userData.email || '',
       isGuest: isGuest,

@@ -10,6 +10,7 @@ import Button from './components/ui/Button';
 import Input from './components/ui/Input';
 import Card from './components/ui/Card';
 import LanguageSwitcher from './components/LanguageSwitcher';
+import { createGuestToken, isGuestToken } from './lib/guest';
 
 type ActivePlack = 'authenticated' | 'anonymous';
 type AuthState = 'login' | 'register' | 'profile';
@@ -93,7 +94,7 @@ const createGuestUser = (): GuestUser => {
     avatar: undefined
   };
   
-  localStorage.setItem('auth_token', 'anonymous');
+  localStorage.setItem('auth_token', createGuestToken(uniqueId));
   localStorage.setItem('auth_user', JSON.stringify(guestUserData));
   sessionStorage.setItem('guest_id', uniqueId);
   
@@ -140,7 +141,7 @@ export default function UnifiedAuthScreen() {
   const loadGuestUser = () => {
     const token = localStorage.getItem('auth_token');
     const userStr = localStorage.getItem('auth_user');
-    if (token === 'anonymous' && userStr) {
+    if (isGuestToken(token) && userStr) {
       try {
         const userData = JSON.parse(userStr);
         if (userData.isAnonymous) {
