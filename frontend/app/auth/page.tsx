@@ -173,19 +173,6 @@ export default function GameAuthPage() {
       <LanguageSwitcher />
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row items-center justify-center min-h-screen gap-8">
-          
-          {/* Left side - Illustration */}
-          <div className="lg:w-1/2 flex justify-center">
-            <div className="relative w-80 h-80">
-              <Image
-                src="/question.gif"
-                alt="Game Access"
-                fill
-                className="object-contain"
-                unoptimized 
-              />
-            </div>
-          </div>
 
           {/* Right side - Auth Form */}
           <div className="lg:w-1/2 flex flex-col items-center">

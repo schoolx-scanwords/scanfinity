@@ -50,7 +50,7 @@ export const translations = {
     goToLogin: 'Перейти ко входу',
     
     // Plack toggles
-    authenticated: 'авторизваться',
+    authenticated: 'авторизоваться',
     anonymous: 'играть как гость',
 
     // Game auth page

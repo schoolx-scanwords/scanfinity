@@ -348,12 +348,6 @@ export default function UnifiedAuthScreen() {
       <div className="flex-1 flex items-center">
         <div className="max-w-7xl mx-auto w-full">
           <div className="flex flex-col lg:flex-row items-center justify-center gap-8 py-10 lg:py-0">
-            {/* Left side - GIF */}
-            <div className="w-full lg:w-1/3 flex justify-center">
-              <div className="relative w-full max-w-[260px] sm:max-w-[340px] lg:max-w-[420px] aspect-square">
-                <Image src="/question.gif" alt="question" fill className="object-contain" unoptimized />
-              </div>
-            </div>
 
             {/* Right side - Content */}
             <div className="w-full lg:w-2/4 flex flex-col items-center lg:items-start">
