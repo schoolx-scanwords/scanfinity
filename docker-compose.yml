@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 services:
   postgres:
     container_name: postgresdb
@@ -16,3 +17,176 @@ services:
 
 volumes:
     postgres:
+=======
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: scanfinity_db
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - scanfinity-data:/var/lib/postgresql/data
+      - ./postgres/scanfinity_db.sql:/docker-entrypoint-initdb.d/scanfinity_db.sql
+    restart: unless-stopped
+    networks:
+      - scanfinity-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: scanfinity_backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      CORS_ORIGINS: "https://scanfinity.fun,http://scanfinity.fun"
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend/out:/app/frontend/out
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - scanfinity-net
+    restart: unless-stopped
+    command: >
+      sh -c "
+        cd /app/backend &&
+        uv sync &&
+        cd /app &&
+        uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  frontend-builder:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: scanfinity_frontend_builder
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+      - ./frontend/out:/app/frontend/out
+    networks:
+      - scanfinity-net
+    command: >
+      sh -c "
+        cd /app/frontend &&
+        npm install &&
+        npm run build &&
+        tail -f /dev/null
+      "
+
+  puzzle-inserter:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: scanfinity_puzzle_inserter
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - scanfinity-net
+    command: >
+      sh -c "
+        apt-get update && apt-get install -y netcat-openbsd &&
+        cd /app/backend &&
+        uv sync &&
+        echo 'Waiting for postgres...' &&
+        while ! nc -z postgres 5432; do sleep 1; done &&
+        echo 'Running puzzle insertion...' &&
+        uv run python -m app.puzzle &&
+        echo 'Puzzle insertion complete! Exiting...'
+      "
+    restart: "no"
+
+  nginx:
+    image: nginx:alpine
+    container_name: scanfinity_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./ssl:/etc/nginx/ssl
+      - ./frontend/out:/usr/share/nginx/html
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend-builder
+    networks:
+      - scanfinity-net
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    container_name: scanfinity_certbot
+    volumes:
+      - ./ssl:/etc/letsencrypt
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - nginx
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    command: >
+      sh -c "
+        certbot certonly --webroot --webroot-path=/var/www/certbot \
+        --email ${CERTBOT_EMAIL} \
+        --agree-tos --no-eff-email \
+        -d scanfinity.fun \
+        -d www.scscanfinity.fun && \
+        while :; do sleep 12h & wait $${!}; certbot renew; done
+      "
+    networks:
+      - scanfinity-net
+
+  certbot-initial:
+    image: certbot/certbot
+    container_name: scanfinity_certbot_initial
+    volumes:
+      - ./ssl:/etc/letsencrypt
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - nginx
+    command: >
+      sh -c "
+        certbot certonly --webroot --webroot-path=/var/www/certbot \
+        --email ${CERTBOT_EMAIL} \
+        --agree-tos --no-eff-email \
+        -d scanfinity.fun \
+        -d www.scscanfinity.fun
+      "
+    networks:
+      - scanfinity-net
+    restart: "no"
+
+networks:
+  scanfinity-net:
+    driver: bridge
+
+volumes:
+  scanfinity-data:
+>>>>>>> origin/front_game_redesign

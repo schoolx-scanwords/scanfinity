@@ -16,7 +16,13 @@ class UserOutDTO(BaseModel):
     id: int
     username: str
     email: EmailStr
+<<<<<<< HEAD
     created_at: Optional[datetime] = None
+=======
+    avatar: Optional[str] = None
+    created_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
+>>>>>>> origin/front_game_redesign
 
     class Config:
         from_attributes = True
@@ -32,3 +38,14 @@ class TokenWithUserDTO(BaseModel):
 
     class Config:
         from_attributes = True
+<<<<<<< HEAD
+=======
+
+
+class VerifyEmailDTO(BaseModel):
+    token: str
+
+
+class ResendVerificationDTO(BaseModel):
+    email: EmailStr
+>>>>>>> origin/front_game_redesign

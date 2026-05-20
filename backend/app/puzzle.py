@@ -1,0 +1,211 @@
+# insert_puzzle.py
+import json
+import random
+import psycopg
+from psycopg.types.json import Jsonb
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+class Puzzle():
+    def __init__(self, size):
+        self.grid = [["0" for _ in range(size)] for _ in range(size)]
+        self.words = []
+        self.word_strings = []
+        self.nodes = []
+        self.c_nodes = []
+
+    def insert_charline(self, x, y, length, direction, char):
+        if direction:
+            for row in range(y, min(y + length, len(self.grid))):
+                if x < len(self.grid[0]) and not self.grid[row][x].isalpha():
+                    self.grid[row][x] = char
+        else:
+            for col in range(x, min(x + length, len(self.grid[0]))):
+                if y < len(self.grid) and not self.grid[y][col].isalpha():
+                    self.grid[y][col] = char
+
+    def fetch(self, x, y, length, direction=bool):
+        if direction:
+            return [self.grid[curr][x] for curr in range(y, y + length)]
+        else:
+            return self.grid[y][x:x + length]
+
+    def insert_word(self, word, x, y, direction=bool, riddle="no_riddle"):
+        puzzlet = f"#{word}#"
+        if direction:
+            y -= 1
+        else:
+            x -= 1
+
+        window = self.fetch(x, y, len(puzzlet), direction)
+        if not "#" in window:
+            if direction:
+                for i in range(len(puzzlet)):
+                    self.grid[y+i][x] = puzzlet[i]
+                self.insert_charline(x + 1, y + 1, len(word), direction, "%")
+                self.insert_charline(x - 1, y + 1, len(word), direction, "%")
+            else:
+                self.grid[y] = self.grid[y][:x] + list(puzzlet) + self.grid[y][x+len(puzzlet):]
+                self.insert_charline(x + 1, y + 1, len(word), direction, "%")
+                self.insert_charline(x + 1, y - 1, len(word), direction, "%")
+            
+            wrd_id = len(self.words)
+            self.words.append({
+                "id": wrd_id,
+                "word": word,
+                "riddle": riddle,
+                "coords": [x, y, len(word)],
+                "direction": "down" if direction else "right"
+            })
+            self.word_strings.append(word)
+
+    def get_json(self):
+        blank_grid = []
+        for line in self.grid:
+            blank_grid.append(["L" if char.isalpha() else char for char in line])
+        return {"id": random.randint(0, 10000), "blank": blank_grid, "grid": self.grid, "words": self.words}
+
+    def log(self):
+        for row in self.grid:
+            print(list(''.join(row).replace("0", "_").replace("#", "_").replace("%", "_")))
+
+
+def get_topic_id(topic_name: str):
+    """Helper to fetch topic_id by name from the database."""
+    # Use environment variables with Docker service name
+    HOST = os.getenv("POSTGRES_HOST", "postgres")  # Use 'postgres' service name in Docker
+    PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+    DB = os.getenv("POSTGRES_DB", "scanfinity")
+    USER = os.getenv("POSTGRES_USER", "scanfinity_user")
+    PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+    
+    if not PASSWORD:
+        print("WARNING: POSTGRES_PASSWORD not set!")
+    
+    print(f"Connecting to database at {HOST}:{PORT} as {USER}")
+    
+    try:
+        conn = psycopg.connect(
+            host=HOST,
+            port=PORT,
+            dbname=DB,
+            user=USER,
+            password=PASSWORD
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT topic_id FROM topics WHERE name = %s", (topic_name,))
+        row = cur.fetchone()
+        cur.close()
+        
+        if row:
+            conn.close()
+            return row[0]
+        
+        # If topic doesn't exist, create it
+        cur = conn.cursor()
+        cur.execute("INSERT INTO topics (name) VALUES (%s) RETURNING topic_id", (topic_name,))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return new_id
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+        raise
+
+
+def insert_puzzle_sync(puzzle_obj):
+    HOST = os.getenv("POSTGRES_HOST", "postgres")
+    PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+    DB = os.getenv("POSTGRES_DB", "scanfinity")
+    USER = os.getenv("POSTGRES_USER", "scanfinity_user")
+    PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+    
+    try:
+        conn = psycopg.connect(
+            host=HOST,
+            port=PORT,
+            dbname=DB,
+            user=USER,
+            password=PASSWORD
+        )
+        
+        cur = conn.cursor()
+        puzzle_dict = puzzle_obj.model_dump()
+        
+        # Get topic_id from topic name (string)
+        topic_name = puzzle_dict['topic']
+        topic_id = get_topic_id(topic_name)
+        
+        cur.execute(
+            """
+            INSERT INTO puzzles 
+            (puzzle_id, lang, topic_id, difficulty, size, times_played, json) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                puzzle_dict['puzzle_id'],
+                puzzle_dict['lang'],
+                topic_id,
+                puzzle_dict['difficulty'],
+                puzzle_dict['size'],
+                puzzle_dict.get('times_played', 0),
+                Jsonb(puzzle_dict['json'])
+            )
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Inserted puzzle {puzzle_dict['puzzle_id']}")
+        return True
+    except Exception as e:
+        print(f"Error inserting puzzle: {e}")
+        return False
+
+
+if __name__ == "__main__":
+    from pydantic import BaseModel
+    from typing import Optional
+    
+    # Define the Pydantic model here
+    class PZL(BaseModel):
+        puzzle_id: int
+        lang: str
+        topic: str
+        difficulty: str
+        size: int
+        times_played: int
+        json: dict
+    
+    # Create and insert puzzle
+    pzl = Puzzle(18)
+    pzl.insert_word("картошка", 3, 5, True, riddle="самый белорусский овощ")
+    pzl.insert_word("морковка", 2, 9, False, "типо зайцы такое едят наверное")
+    pzl.insert_word("мадагаскар", 2, 6, False, "в этом мультике был бегемот который любит больших и попастых")
+    pzl.insert_word("колёса", 8, 2, True, "их можно (было) найти у оффисного стула и у паши техника")
+    pzl.insert_word("борат", 5, 3, True, "нрааааааааица")
+    pzl.insert_word("огурец", 6, 9, True, "самый дорогой овощ сейчас в россии")
+    pzl.insert_word("амонгас", 9, 9, True, "красный всегда убийца")
+
+    pzl.log()
+    print()
+    
+    jsonpzl = pzl.get_json()
+    pzl_obj = PZL(
+        puzzle_id=jsonpzl["id"],
+        lang="ru",
+        topic="Memes",
+        difficulty="medium",
+        size=len(jsonpzl["grid"]),
+        times_played=0,
+        json=jsonpzl
+    )
+    
+    success = insert_puzzle_sync(pzl_obj)
+    if success:
+        print("DONE! Puzzle inserted successfully.")
+    else:
+        print("FAILED! Could not insert puzzle.")
